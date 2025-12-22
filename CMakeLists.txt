@@ -13,7 +13,8 @@ find_package(Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 include(FetchContent)
 FetchContent_Declare(
   googletest
-  SOURCE_DIR ./tests
+  # 使用 file:// 协议 + CMAKE_CURRENT_SOURCE_DIR 变量
+  URL file://${CMAKE_CURRENT_SOURCE_DIR}/tests/googletest-1.14.0.zip
 )
 FetchContent_MakeAvailable(googletest)
 

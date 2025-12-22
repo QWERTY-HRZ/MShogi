@@ -1,11 +1,14 @@
 set(MSHOGI_LIB_SOURCES
     GameEngine.cpp
     UIController.cpp
+    Board.cpp
 )
 
 set(MSHOGI_LIB_HEADERS
     ../include/GameEngine.h
     ../include/UIController.h
+    ../include/Piece.h
+    ../include/Board.h
 )
 
 add_library(MShogiLib STATIC
