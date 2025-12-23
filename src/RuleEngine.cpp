@@ -1,0 +1,184 @@
+#include "../include/RuleEngine.h"
+#include <cmath>
+#include <algorithm>
+
+bool RuleEngine::validateMove(const Board& board, const Move& move, std::optional<PieceType> lastCapturedType) const {
+    if (!board.isInside(move.toX, move.toY)) return false;
+
+    if (move.isDrop) {
+        return validateDrop(board, move, lastCapturedType);
+    } else {
+        // 判断坐标是否合法
+        if (!board.isInside(move.fromX, move.fromY)) return false;
+        return validateNormalMove(board, move);
+    }
+}
+
+bool RuleEngine::validateDrop(const Board& board, const Move& move, std::optional<PieceType> forbidden) const {
+    // 格子不为空时不允许打入
+    if (board.getPiece(move.toX, move.toY) != nullptr) return false;
+
+    // 上回合吃掉的棋子不允许打入
+    if (forbidden.has_value() && move.dropType == forbidden.value()) {
+        return false;
+    }
+
+    // 规则：侯打入时变回兵
+    if (move.dropType == PieceType::Hou) return false;
+
+    int bottomLine = board.getBottomLine(move.player);
+    if (move.toY == bottomLine) return false;
+
+    // 规则：车和相只能放在靠近己方的三行
+    if (move.dropType == PieceType::Rook || move.dropType == PieceType::Bishop) {
+        if (move.player == Player::Sente) {
+            if (move.toY > 2) return false;
+        } else {
+            if (move.toY < 3) return false;
+        }
+    }
+
+    return true;
+}
+
+bool RuleEngine::validateNormalMove(const Board& board, const Move& move) const {
+    auto piece = board.getPiece(move.fromX, move.fromY);
+    if (!piece) return false;
+    if (piece->getOwner() != move.player) return false;
+    // 不能原位移动
+    if (move.fromX == move.toX && move.fromY == move.toY) return false;
+
+    auto target = board.getPiece(move.toX, move.toY);
+    if (target && target->getOwner() == move.player) return false;
+
+    int dx = move.toX - move.fromX;
+    int dy = move.toY - move.fromY;
+
+    switch (piece->getType()) {
+        case PieceType::King:   return canKingMove(dx, dy);
+        case PieceType::Rook:   return canRookMove(board, move, dx, dy);
+        case PieceType::Bishop: return canBishopMove(board, move, dx, dy);
+        case PieceType::Pawn:   return canPawnMove(dx, dy, move.player);
+        case PieceType::Hou:    return canHouMove(dx, dy, move.player);
+        default: return false;
+    }
+}
+
+bool RuleEngine::canKingMove(int dx, int dy) const {
+    // 八向移动一格
+    return std::abs(dx) <= 1 && std::abs(dy) <= 1;
+}
+
+bool RuleEngine::canRookMove(const Board& board, const Move& move, int dx, int dy) const {
+    if (dx != 0 && dy != 0) return false;
+
+    int dist = std::abs(dx + dy);
+    if (dist == 1) return true;
+
+    int steps = std::max(std::abs(dx), std::abs(dy));
+    int stepX = (dx == 0) ? 0 : (dx > 0 ? 1 : -1);
+    int stepY = (dy == 0) ? 0 : (dy > 0 ? 1 : -1);
+    // 连续移动时，路径需要为空
+    for (int i = 1; i < steps; ++i) {
+        if (board.getPiece(move.fromX + i * stepX, move.fromY + i * stepY) != nullptr) {
+            return false;
+        }
+    }
+
+    if (board.getPiece(move.toX, move.toY) != nullptr) {
+        return false;
+    }
+
+    return true;
+}
+
+bool RuleEngine::canBishopMove(const Board& board, const Move& move, int dx, int dy) const {
+    if (std::abs(dx) != std::abs(dy)) return false;
+
+    int dist = std::abs(dx);
+    if (dist == 1) return true;
+
+    // 斜向一格有己方棋子时，可在连接方向两格处吃子
+    if (dist == 2) {
+        int midX = move.fromX + dx / 2;
+        int midY = move.fromY + dy / 2;
+        auto midPiece = board.getPiece(midX, midY);
+        auto targetPiece = board.getPiece(move.toX, move.toY);
+        // validateNormalMove 已排除己方棋子可能，此处只要 target 存在即可
+        if (midPiece && midPiece->getOwner() == move.player) {
+            // 不能是普通的移动
+            if (targetPiece) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool RuleEngine::canPawnMove(int dx, int dy, Player p) const {
+    if (dx != 0) return false;
+    return (p == Player::Sente) ? (dy == 1) : (dy == -1);
+}
+
+bool RuleEngine::canHouMove(int dx, int dy, Player p) const {
+    if (std::abs(dx) > 1 || std::abs(dy) > 1) return false;
+
+    if (p == Player::Sente) {
+        if (dy == -1 && dx != 0) return false;
+    } else {
+        if (dy == 1 && dx != 0) return false;
+    }
+
+    return true;
+}
+
+bool RuleEngine::checkPromotion(const Board& board, const Move& move) const {
+    if (move.isDrop) return false;
+
+    auto piece = board.getPiece(move.fromX, move.fromY);
+    if (!piece || piece->getType() != PieceType::Pawn) return false;
+
+    int bottomLine = board.getBottomLine(move.player);
+    return move.toY == bottomLine;
+}
+
+int RuleEngine::isGameOver(Board& board) const {
+    bool senteKingExists = false;
+    bool goteKingExists = false;
+    bool senteKingAtBottom = false;
+    bool goteKingAtBottom = false;
+
+    int senteBottom = board.getBottomLine(Player::Sente);
+    int goteBottom = board.getBottomLine(Player::Gote);
+
+    // 将死规则判定
+    for (int i = 0; i < Board::COLS; ++i) {
+        for (int j = 0; j < Board::ROWS; ++j) {
+            auto p = board.getPiece(i, j);
+            if (p && p->getType() == PieceType::King) {
+                if (p->getOwner() == Player::Sente) {
+                    senteKingExists = true;
+                    if (j == senteBottom) senteKingAtBottom = true;
+                } else {
+                    goteKingExists = true;
+                    if (j == goteBottom) goteKingAtBottom = true;
+                }
+            }
+        }
+    }
+
+    if (!senteKingExists) return 2;
+    if (!goteKingExists) return 1;
+
+    // 下底规则判定
+    // 注意：这里的逻辑是，如果上回合王到了底线并存活下来，本回合开始前即判定胜利
+    if (board.getKingInBaseFlag(Player::Sente) && senteKingExists) return 1;
+    if (board.getKingInBaseFlag(Player::Gote) && goteKingExists) return 2;
+
+    // 更新 Flag 供下回合使用
+    board.setKingInBaseFlag(Player::Sente, senteKingAtBottom);
+    board.setKingInBaseFlag(Player::Gote, goteKingAtBottom);
+
+    return 0;
+}

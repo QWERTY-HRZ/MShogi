@@ -1,6 +1,12 @@
 #include "../include/Board.h"
 
-Board::Board() {
+Board::Board()
+    : m_senteBottomLine(5),
+      m_goteBottomLine(0),
+      m_senteFlag(false),
+      m_goteFlag(false)
+{
+    // 初始化棋盘
     m_grid.resize(COLS, std::vector<std::shared_ptr<Piece>>(ROWS, nullptr));
 }
 
@@ -12,6 +18,8 @@ void Board::clear() {
     for (auto& col : m_grid) {
         std::fill(col.begin(), col.end(), nullptr);
     }
+    m_senteFlag = false;
+    m_goteFlag = false;
 }
 
 bool Board::isInside(int x, int y) const {
@@ -34,15 +42,18 @@ bool Board::placePiece(int x, int y, std::shared_ptr<Piece> piece) {
 }
 
 std::shared_ptr<Piece> Board::removePiece(int x, int y) {
+    // 吃子
     if (!isInside(x, y)) {
         return nullptr;
     }
     auto piece = m_grid[x][y];
     m_grid[x][y] = nullptr;
+    // 返回被吃的子
     return piece;
 }
 
 bool Board::movePiece(int fromX, int fromY, int toX, int toY) {
+    // 坐标是否合法
     if (!isInside(fromX, fromY) || !isInside(toX, toY)) {
         return false;
     }
@@ -56,7 +67,25 @@ bool Board::movePiece(int fromX, int fromY, int toX, int toY) {
         return false;
     }
 
+    // 棋子行动
     m_grid[toX][toY] = piece;
     m_grid[fromX][fromY] = nullptr;
     return true;
+}
+
+int Board::getBottomLine(Player p) const {
+    return (p == Player::Sente) ? m_senteBottomLine : m_goteBottomLine;
+}
+
+bool Board::getKingInBaseFlag(Player p) const {
+    // 每回合判断王是否下底 用于计算胜利条件
+    return (p == Player::Sente) ? m_senteFlag : m_goteFlag;
+}
+
+void Board::setKingInBaseFlag(Player p, bool val) {
+    if (p == Player::Sente) {
+        m_senteFlag = val;
+    } else {
+        m_goteFlag = val;
+    }
 }

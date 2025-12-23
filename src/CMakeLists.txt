@@ -2,6 +2,7 @@ set(MSHOGI_LIB_SOURCES
     GameEngine.cpp
     UIController.cpp
     Board.cpp
+    RuleEngine.cpp
 )
 
 set(MSHOGI_LIB_HEADERS
@@ -9,6 +10,7 @@ set(MSHOGI_LIB_HEADERS
     ../include/UIController.h
     ../include/Piece.h
     ../include/Board.h
+    ../include/RuleEngine.h
 )
 
 add_library(MShogiLib STATIC
