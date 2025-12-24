@@ -1,4 +1,4 @@
-#include "../include/RuleEngine.h"
+﻿#include "../include/RuleEngine.h"
 #include <cmath>
 #include <algorithm>
 
@@ -140,6 +140,7 @@ bool RuleEngine::checkPromotion(const Board& board, const Move& move) const {
     if (!piece || piece->getType() != PieceType::Pawn) return false;
 
     int bottomLine = board.getBottomLine(move.player);
+    // 最后判断是否走到底线
     return move.toY == bottomLine;
 }
 
@@ -172,7 +173,7 @@ int RuleEngine::isGameOver(Board& board) const {
     if (!goteKingExists) return 1;
 
     // 下底规则判定
-    // 注意：这里的逻辑是，如果上回合王到了底线并存活下来，本回合开始前即判定胜利
+    // 这里的逻辑是：如果上回合王到了底线并存活下来，本回合结束时没被吃即是胜利
     if (board.getKingInBaseFlag(Player::Sente) && senteKingExists) return 1;
     if (board.getKingInBaseFlag(Player::Gote) && goteKingExists) return 2;
 

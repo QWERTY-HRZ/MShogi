@@ -70,6 +70,7 @@ TEST_F(BoardTest, MovePieceToSameLocation) {
     auto king = std::make_shared<King>(Player::Sente);
     board.placePiece(2, 2, king);
     EXPECT_FALSE(board.movePiece(2, 2, 2, 2));
+    EXPECT_NE(board.getPiece(2, 2), nullptr); // 确保棋子不消失
 }
 
 TEST_F(BoardTest, OverwritePieceOnMove) {

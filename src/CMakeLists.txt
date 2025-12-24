@@ -3,6 +3,7 @@ set(MSHOGI_LIB_SOURCES
     UIController.cpp
     Board.cpp
     RuleEngine.cpp
+    Movehistory.cpp
 )
 
 set(MSHOGI_LIB_HEADERS
@@ -11,6 +12,7 @@ set(MSHOGI_LIB_HEADERS
     ../include/Piece.h
     ../include/Board.h
     ../include/RuleEngine.h
+    ../include/Movehistory.h
 )
 
 add_library(MShogiLib STATIC
