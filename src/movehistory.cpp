@@ -1,4 +1,4 @@
-#include "../include/MoveHistory.h"
+﻿#include "../include/MoveHistory.h"
 #include <sstream>
 
 void MoveHistory::push(const HistoryNode& node) {
@@ -37,14 +37,15 @@ std::string MoveHistory::generateNotation(const Board& board, const Move& move, 
     // 1. 先后手
     ss << (move.player == Player::Sente ? "先" : "后");
 
-    // 2. 棋子名称
     std::string pieceName;
+    // 棋子名称 默认为兵！
     PieceType type = PieceType::Pawn;
 
     if (move.isDrop) {
         type = move.dropType;
     } else {
-        auto p = board.getPiece(move.fromX, move.fromY);
+        // 移动后，必须从 to 处获取棋子信息！
+        auto p = board.getPiece(move.toX, move.toY);
         if (p) type = p->getType();
     }
 

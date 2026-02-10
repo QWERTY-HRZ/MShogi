@@ -106,7 +106,7 @@ bool RuleEngine::canBishopMove(const Board& board, const Move& move, int dx, int
         auto targetPiece = board.getPiece(move.toX, move.toY);
         // validateNormalMove 已排除己方棋子可能，此处只要 target 存在即可
         if (midPiece && midPiece->getOwner() == move.player) {
-            // 不能是普通的移动
+            // 只能吃子
             if (targetPiece) {
                 return true;
             }
@@ -118,16 +118,18 @@ bool RuleEngine::canBishopMove(const Board& board, const Move& move, int dx, int
 
 bool RuleEngine::canPawnMove(int dx, int dy, Player p) const {
     if (dx != 0) return false;
-    return (p == Player::Sente) ? (dy == 1) : (dy == -1);
+    // 先手在 Y=5，进攻方向是减小Y；后手进攻是增大Y
+    return (p == Player::Sente) ? (dy == -1) : (dy == 1);
 }
 
 bool RuleEngine::canHouMove(int dx, int dy, Player p) const {
     if (std::abs(dx) > 1 || std::abs(dy) > 1) return false;
 
     if (p == Player::Sente) {
-        if (dy == -1 && dx != 0) return false;
-    } else {
+        // 不能去斜下方
         if (dy == 1 && dx != 0) return false;
+    } else {
+        if (dy == -1 && dx != 0) return false;
     }
 
     return true;
@@ -149,7 +151,7 @@ int RuleEngine::isGameOver(Board& board) const {
     bool goteKingExists = false;
     bool senteKingAtBottom = false;
     bool goteKingAtBottom = false;
-
+    // 先手为 0，后手为 5
     int senteBottom = board.getBottomLine(Player::Sente);
     int goteBottom = board.getBottomLine(Player::Gote);
 
@@ -173,7 +175,7 @@ int RuleEngine::isGameOver(Board& board) const {
     if (!goteKingExists) return 1;
 
     // 下底规则判定
-    // 这里的逻辑是：如果上回合王到了底线并存活下来，本回合结束时没被吃即是胜利
+    // 如果上一回合已到底线，本回合未被吃则获胜
     if (board.getKingInBaseFlag(Player::Sente) && senteKingExists) return 1;
     if (board.getKingInBaseFlag(Player::Gote) && goteKingExists) return 2;
 

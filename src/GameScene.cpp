@@ -30,6 +30,7 @@ void GameScene::drawPieces() {
         for (int y = 0; y < Board::ROWS; ++y) {
             auto p = board.getPiece(x, y);
             if (p) {
+                // 修正：直接使用 y，不反转
                 auto item = new PieceItem(p->getType(), p->getOwner(), PieceItem::OnBoard, x, y, CELL_SIZE);
                 item->setPos(gridToScene(x, y));
                 addItem(item);
@@ -40,6 +41,8 @@ void GameScene::drawPieces() {
 
 void GameScene::drawHands() {
     const auto& board = m_engine->getBoard();
+
+    // Gote (后手) 手驹绘制在上方
     int gX = BOARD_OFFSET_X, gY = 20;
     const std::vector<PieceType> types = {PieceType::Rook, PieceType::Bishop, PieceType::Pawn, PieceType::Hou};
 
@@ -53,6 +56,7 @@ void GameScene::drawHands() {
         }
     }
 
+    // Sente (先手) 手驹绘制在下方
     int sX = BOARD_OFFSET_X, sY = BOARD_OFFSET_Y + 6 * CELL_SIZE + 20;
     for (auto t : types) {
         int count = board.getHandCount(Player::Sente, t);
@@ -66,14 +70,17 @@ void GameScene::drawHands() {
 }
 
 QPointF GameScene::gridToScene(int x, int y) const {
-    return QPointF(BOARD_OFFSET_X + x * CELL_SIZE, BOARD_OFFSET_Y + (5 - y) * CELL_SIZE);
+    // 修正：直接映射 Y 坐标，0为顶，5为底
+    return QPointF(BOARD_OFFSET_X + x * CELL_SIZE, BOARD_OFFSET_Y + y * CELL_SIZE);
 }
 
 bool GameScene::sceneToGrid(QPointF pos, int &x, int &y) const {
     int rx = (pos.x() - BOARD_OFFSET_X) / CELL_SIZE;
     int ry = (pos.y() - BOARD_OFFSET_Y) / CELL_SIZE;
+    // 修正：直接使用 ry，不反转
     if (rx >= 0 && rx < 5 && ry >= 0 && ry < 6) {
-        x = rx; y = 5 - ry;
+        x = rx;
+        y = ry;
         return true;
     }
     return false;
@@ -90,7 +97,6 @@ bool GameScene::handlePieceDrop(PieceItem* item, QPointF dropPos) {
         move = Move::makeDrop(toX, toY, item->getType(), item->getOwner());
     }
 
-    // 通过回调请求控制器处理，解耦 Scene 和 Engine 的写操作
     if (m_requestCallback) {
         return m_requestCallback(move);
     }

@@ -21,6 +21,8 @@ private slots:
     void onMoveExecuted(const std::string& notation);
     void onGameEnded(int result);
     void updateTimer();
+    // 悔棋槽函数
+    void onUndoExecuted();
 
 private:
     void setupUi();
@@ -36,4 +38,7 @@ private:
     QTextEdit* m_txtHistory;
     QTimer* m_timer;
     int m_secondsElapsed;
+
+    // 记录当前执子方
+    Player m_currentPlayer;
 };

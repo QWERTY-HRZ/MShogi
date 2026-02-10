@@ -1,8 +1,8 @@
-#include "../include/Board.h"
+﻿#include "../include/Board.h"
 
 Board::Board()
-    : m_senteBottomLine(5),
-      m_goteBottomLine(0),
+    : m_senteBottomLine(0),
+      m_goteBottomLine(5),
       m_senteFlag(false),
       m_goteFlag(false) {
     // 初始化棋盘
@@ -66,6 +66,7 @@ bool Board::movePiece(int fromX, int fromY, int toX, int toY) {
 }
 
 int Board::getBottomLine(Player p) const {
+    // 先手为 0，后手为 5
     return (p == Player::Sente) ? m_senteBottomLine : m_goteBottomLine;
 }
 

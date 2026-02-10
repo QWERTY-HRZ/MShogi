@@ -1,7 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include <QObject>
-#include <QDebug>
+#include <memory>
 #include "Board.h"
 #include "RuleEngine.h"
 #include "MoveHistory.h"
@@ -9,7 +9,6 @@
 enum class GameState {
     Init,
     Playing,
-    PromotionCheck, // 架构要求 保留检查升变的状态
     End
 };
 
@@ -19,11 +18,14 @@ class GameEngine : public QObject {
 public:
     explicit GameEngine(QObject *parent = nullptr);
 
+    // 初始化并开始游戏，布局棋子
     void startGame();
+    // 执行移动：包含校验、吃子、升变、胜负判定
     bool makeMove(const Move& move);
+    // 悔棋：恢复盘面和手驹状态
     void undo();
-    void redo(); // 预留接口
-    void finishGame(int result); // result: 1=SenteWin, 2=GoteWin
+    // 结束游戏
+    void finishGame(int result);
 
     GameState getCurrentState() const;
     const Board& getBoard() const;
@@ -32,7 +34,10 @@ public:
 signals:
     void stateChanged(GameState newState);
     void gameEnded(int result);
+    // 移动执行成功后发送记谱字符串
     void moveExecuted(const std::string& notation);
+    // 悔棋完成信号
+    void undoExecuted();
 
 private:
     GameState m_currentState;
@@ -40,6 +45,6 @@ private:
     RuleEngine m_ruleEngine;
     MoveHistory m_history;
 
-    // 辅助创建棋子的对象
+    // 辅助工厂方法：创建棋子实例
     std::shared_ptr<Piece> createPiece(PieceType type, Player owner);
 };
