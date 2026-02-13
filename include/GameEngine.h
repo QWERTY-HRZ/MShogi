@@ -26,8 +26,11 @@ public:
     void undo();
     // 结束游戏
     void finishGame(int result);
+    // 查询可走位置
+    std::vector<Move> getLegalMoves(int x, int y);
 
     GameState getCurrentState() const;
+    Player getCurrentPlayer() const;
     const Board& getBoard() const;
     const MoveHistory& getHistory() const;
 

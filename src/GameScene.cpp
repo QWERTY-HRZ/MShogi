@@ -8,6 +8,9 @@ GameScene::GameScene(GameEngine* engine, QObject* parent)
 }
 
 void GameScene::refreshBoard() {
+    // 重置选中棋子、状态
+    m_selectedPiece = nullptr;
+    m_highlights.clear();
     clear();
     drawGrid();
     drawPieces();
@@ -101,4 +104,37 @@ bool GameScene::handlePieceDrop(PieceItem* item, QPointF dropPos) {
         return m_requestCallback(move);
     }
     return false;
+}
+
+void GameScene::toggleHighlight(PieceItem* item) {
+    // 清除旧的高亮
+    for (auto rect : m_highlights) delete rect;
+    m_highlights.clear();
+
+    // 点击已选中的棋子，取消选中
+    if (m_selectedPiece == item) {
+        m_selectedPiece = nullptr;
+        return;
+    }
+
+    // 只有当前回合玩家的棋子才能高亮
+    if (item->getOwner() != m_engine->getCurrentPlayer()) return;
+    // 获取合法移动
+    m_selectedPiece = item;
+    auto moves = m_engine->getLegalMoves(item->getGridX(), item->getGridY());
+
+    // 绘制高亮
+    for (const auto& move : moves) {
+        // 判断是移动还是吃子【已排除己方棋子】
+        bool isCapture = (m_engine->getBoard().getPiece(move.toX, move.toY) != nullptr);
+        // 移动、吃子标记为：浅红、浅绿
+        QColor color = isCapture ? QColor(255, 180, 180, 150) : QColor(180, 255, 180, 150);
+
+        // 计算场景坐标
+        QPointF pos(BOARD_OFFSET_X + move.toX * CELL_SIZE, BOARD_OFFSET_Y + move.toY * CELL_SIZE);
+        auto rect = addRect(pos.x(), pos.y(), CELL_SIZE, CELL_SIZE, Qt::NoPen, QBrush(color));
+        // 高亮位置：网格(0)之上，棋子(1)之下
+        rect->setZValue(0.5);
+        m_highlights.append(rect);
+    }
 }

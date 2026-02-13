@@ -17,6 +17,8 @@ public:
 
     // 设置回调函数
     void setMoveRequestCallback(MoveRequestCallback cb) { m_requestCallback = cb; }
+    // 切换棋子高亮状态
+    void toggleHighlight(PieceItem* item);
 
     static constexpr int CELL_SIZE = 80;
     static constexpr int BOARD_OFFSET_X = 50;
@@ -28,6 +30,9 @@ private:
 
     QPointF gridToScene(int x, int y) const;
     bool sceneToGrid(QPointF pos, int &x, int &y) const;
+
+    QList<QGraphicsRectItem*> m_highlights; // 存储高亮方块
+    PieceItem* m_selectedPiece = nullptr;   // 当前选中的棋子
 
     void drawGrid();
     void drawPieces();

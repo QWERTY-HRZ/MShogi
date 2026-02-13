@@ -137,6 +137,24 @@ void GameEngine::finishGame(int result) {
     emit gameEnded(result);
 }
 
+std::vector<Move> GameEngine::getLegalMoves(int x, int y) {
+    std::vector<Move> moves;
+    auto piece = m_board.getPiece(x, y);
+    if (!piece) return moves;
+
+    // 遍历棋盘所有格子尝试移动
+    for (int tx = 0; tx < Board::COLS; ++tx) {
+        for (int ty = 0; ty < Board::ROWS; ++ty) {
+            Move m = Move::makeMove(x, y, tx, ty, piece->getOwner());
+            // 传入 std::nullopt 因为只是预测，不需要考虑上一手的禁手
+            if (m_ruleEngine.validateMove(m_board, m, std::nullopt)) {
+                moves.push_back(m);
+            }
+        }
+    }
+    return moves;
+}
+
 GameState GameEngine::getCurrentState() const { return m_currentState; }
 const Board& GameEngine::getBoard() const { return m_board; }
 const MoveHistory& GameEngine::getHistory() const { return m_history; }
@@ -150,4 +168,11 @@ std::shared_ptr<Piece> GameEngine::createPiece(PieceType type, Player owner) {
         case PieceType::Hou: return std::make_shared<Hou>(owner);
         default: return nullptr;
     }
+}
+
+Player GameEngine::getCurrentPlayer() const {
+    // 默认为先手
+    if (!m_history.peek().has_value()) return Player::Sente;
+    // 否则返回【上一手玩家的对手】
+    return (m_history.peek()->move.player == Player::Sente) ? Player::Gote : Player::Sente;
 }

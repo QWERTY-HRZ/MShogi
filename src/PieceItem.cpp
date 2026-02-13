@@ -1,4 +1,4 @@
-#include "../include/PieceItem.h"
+﻿#include "../include/PieceItem.h"
 #include "../include/GameScene.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
@@ -71,6 +71,12 @@ void PieceItem::setGridPos(int x, int y) {
 }
 
 void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
+    // 棋盘上的棋子显示轨迹
+    if (m_location == OnBoard) {
+            if (auto gameScene = dynamic_cast<GameScene*>(scene())) {
+                gameScene->toggleHighlight(this);
+            }
+        }
     m_dragStartPos = pos(); // 记录起始位置
     setCursor(Qt::ClosedHandCursor);
     setZValue(10); // 拖拽时置顶
