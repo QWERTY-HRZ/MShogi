@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <vector>
 #include <memory>
 #include <map>
 #include "Piece.h"
+#include "GameConstants.h"
 
 class Board {
 public:
@@ -29,8 +30,8 @@ public:
     bool removeFromHand(Player p, PieceType type);
     int getHandCount(Player p, PieceType type) const;
 
-    static constexpr int ROWS = 6;
-    static constexpr int COLS = 5;
+    static constexpr int ROWS = GameConstants::ROWS;
+    static constexpr int COLS = GameConstants::COLS;
 private:
     std::vector<std::vector<std::shared_ptr<Piece>>> m_grid;
     std::map<Player, std::map<PieceType, int>> m_hands;

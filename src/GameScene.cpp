@@ -4,7 +4,10 @@
 GameScene::GameScene(GameEngine* engine, QObject* parent)
     : QGraphicsScene(parent), m_engine(engine)
 {
-    setSceneRect(0, 0, 500, 800);
+    // 500, 800
+    int w = BOARD_OFFSET_X * 2 + GameConstants::COLS * CELL_SIZE;
+    int h = BOARD_OFFSET_Y * 2 + GameConstants::ROWS * CELL_SIZE;
+    setSceneRect(0, 0, w, h);
 }
 
 void GameScene::refreshBoard() {
@@ -19,12 +22,12 @@ void GameScene::refreshBoard() {
 
 void GameScene::drawGrid() {
     QPen pen(Qt::black);
-    for (int i = 0; i <= 5; ++i)
+    for (int i = 0; i <= GameConstants::COLS; ++i)
         addLine(BOARD_OFFSET_X + i * CELL_SIZE, BOARD_OFFSET_Y,
-                 BOARD_OFFSET_X + i * CELL_SIZE, BOARD_OFFSET_Y + 6 * CELL_SIZE, pen);
-    for (int j = 0; j <= 6; ++j)
+                 BOARD_OFFSET_X + i * CELL_SIZE, BOARD_OFFSET_Y + GameConstants::ROWS * CELL_SIZE, pen);
+    for (int j = 0; j <= GameConstants::ROWS; ++j)
         addLine(BOARD_OFFSET_X, BOARD_OFFSET_Y + j * CELL_SIZE,
-                 BOARD_OFFSET_X + 5 * CELL_SIZE, BOARD_OFFSET_Y + j * CELL_SIZE, pen);
+                 BOARD_OFFSET_X + GameConstants::COLS * CELL_SIZE, BOARD_OFFSET_Y + j * CELL_SIZE, pen);
 }
 
 void GameScene::drawPieces() {
@@ -60,7 +63,7 @@ void GameScene::drawHands() {
     }
 
     // Sente (先手) 手驹绘制在下方
-    int sX = BOARD_OFFSET_X, sY = BOARD_OFFSET_Y + 6 * CELL_SIZE + 20;
+    int sX = BOARD_OFFSET_X, sY = BOARD_OFFSET_Y + GameConstants::ROWS * CELL_SIZE + 20;
     for (auto t : types) {
         int count = board.getHandCount(Player::Sente, t);
         for (int i = 0; i < count; ++i) {
@@ -81,7 +84,7 @@ bool GameScene::sceneToGrid(QPointF pos, int &x, int &y) const {
     int rx = (pos.x() - BOARD_OFFSET_X) / CELL_SIZE;
     int ry = (pos.y() - BOARD_OFFSET_Y) / CELL_SIZE;
     // 修正：直接使用 ry，不反转
-    if (rx >= 0 && rx < 5 && ry >= 0 && ry < 6) {
+    if (rx >= 0 && rx < GameConstants::COLS && ry >= 0 && ry < GameConstants::ROWS) {
         x = rx;
         y = ry;
         return true;
@@ -119,17 +122,23 @@ void GameScene::toggleHighlight(PieceItem* item) {
 
     // 只有当前回合玩家的棋子才能高亮
     if (item->getOwner() != m_engine->getCurrentPlayer()) return;
-    // 获取合法移动
+    // 获取合法移动、打入位置
     m_selectedPiece = item;
-    auto moves = m_engine->getLegalMoves(item->getGridX(), item->getGridY());
-
+    std::vector<Move> moves;
+    if (item->getLocation() == PieceItem::OnBoard) {
+        moves = m_engine->getLegalMoves(item->getGridX(), item->getGridY());
+    } else {
+        moves = m_engine->getLegalDrops(item->getType());
+    }
     // 绘制高亮
     for (const auto& move : moves) {
-        // 判断是移动还是吃子【已排除己方棋子】
-        bool isCapture = (m_engine->getBoard().getPiece(move.toX, move.toY) != nullptr);
+        bool isCapture = false;
+        // 判断是否有吃子
+        if (!move.isDrop) {
+            isCapture = (m_engine->getBoard().getPiece(move.toX, move.toY) != nullptr);
+        }
         // 移动、吃子标记为：浅红、浅绿
         QColor color = isCapture ? QColor(255, 180, 180, 150) : QColor(180, 255, 180, 150);
-
         // 计算场景坐标
         QPointF pos(BOARD_OFFSET_X + move.toX * CELL_SIZE, BOARD_OFFSET_Y + move.toY * CELL_SIZE);
         auto rect = addRect(pos.x(), pos.y(), CELL_SIZE, CELL_SIZE, Qt::NoPen, QBrush(color));

@@ -60,8 +60,8 @@ std::string MoveHistory::generateNotation(const Board& board, const Move& move, 
 
     // 3. 坐标 (中文数字)
     const char* cnNums[] = {"一", "二", "三", "四", "五", "六"};
-    if (move.toX >= 0 && move.toX < 6) ss << cnNums[move.toX];
-    if (move.toY >= 0 && move.toY < 6) ss << cnNums[move.toY];
+    if (move.toX >= 0 && move.toX < GameConstants::COLS) ss << cnNums[move.toX];
+    if (move.toY >= 0 && move.toY < GameConstants::ROWS) ss << cnNums[move.toY];
 
     // 4. 后缀处理：打入标记 或 方向消歧
     if (move.isDrop) {

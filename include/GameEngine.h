@@ -28,6 +28,8 @@ public:
     void finishGame(int result);
     // 查询可走位置
     std::vector<Move> getLegalMoves(int x, int y);
+    // 查询可打入位置
+    std::vector<Move> getLegalDrops(PieceType type);
 
     GameState getCurrentState() const;
     Player getCurrentPlayer() const;

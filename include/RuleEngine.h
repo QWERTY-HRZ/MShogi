@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include "Board.h"
+#include "../include/GameConstants.h"
 #include <optional>
 
 struct Move {

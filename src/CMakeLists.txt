@@ -17,6 +17,7 @@ set(MSHOGI_LIB_HEADERS
     ../include/Movehistory.h
     ../include/PieceItem.h
     ../include/GameScene.h
+    ../include/GameConstants.h
 )
 
 add_library(MShogiLib STATIC

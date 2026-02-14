@@ -23,8 +23,8 @@ void PieceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
     // 模拟绘制：实际项目中应使用 drawPixmap 加载图片
     // 简单的梯形或矩形表示
     QRectF rect = boundingRect();
-    
-    QColor color = (m_owner == Player::Sente) ? Qt::black : Qt::red; // 简单区分
+    // 区分颜色 先红后黑
+    QColor color = (m_owner == Player::Sente) ? Qt::red : Qt::black;
     QPen pen(color);
     pen.setWidth(2);
     painter->setPen(pen);
@@ -71,12 +71,10 @@ void PieceItem::setGridPos(int x, int y) {
 }
 
 void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
-    // 棋盘上的棋子显示轨迹
-    if (m_location == OnBoard) {
-            if (auto gameScene = dynamic_cast<GameScene*>(scene())) {
-                gameScene->toggleHighlight(this);
-            }
-        }
+    // 棋子显示轨迹
+    if (auto gameScene = dynamic_cast<GameScene*>(scene())) {
+        gameScene->toggleHighlight(this);
+    }
     m_dragStartPos = pos(); // 记录起始位置
     setCursor(Qt::ClosedHandCursor);
     setZValue(10); // 拖拽时置顶

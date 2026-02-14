@@ -5,23 +5,25 @@ GameEngine::GameEngine(QObject *parent)
 
 void GameEngine::startGame() {
     m_board.clear();
+    const int maxY = GameConstants::SENTE_BASE_Y;
+    const int minY = GameConstants::GOTE_BASE_Y;
 
     // Sente (先手，位于下方 Y=4,5，从下往上攻)
-    m_board.placePiece(2, 5, createPiece(PieceType::King, Player::Sente));
-    m_board.placePiece(0, 5, createPiece(PieceType::Bishop, Player::Sente));
-    m_board.placePiece(4, 5, createPiece(PieceType::Rook, Player::Sente));
-    m_board.placePiece(0, 4, createPiece(PieceType::Pawn, Player::Sente));
-    m_board.placePiece(2, 4, createPiece(PieceType::Pawn, Player::Sente));
-    m_board.placePiece(4, 4, createPiece(PieceType::Pawn, Player::Sente));
+    m_board.placePiece(2, maxY, createPiece(PieceType::King, Player::Sente));
+    m_board.placePiece(0, maxY, createPiece(PieceType::Bishop, Player::Sente));
+    m_board.placePiece(4, maxY, createPiece(PieceType::Rook, Player::Sente));
+    m_board.placePiece(0, maxY - 1, createPiece(PieceType::Pawn, Player::Sente));
+    m_board.placePiece(2, maxY - 1, createPiece(PieceType::Pawn, Player::Sente));
+    m_board.placePiece(4, maxY - 1, createPiece(PieceType::Pawn, Player::Sente));
 
     // Gote (后手，位于上方 Y=0,1，从上往下攻)
-    m_board.placePiece(2, 0, createPiece(PieceType::King, Player::Gote));
     // 对应Sente
-    m_board.placePiece(0, 0, createPiece(PieceType::Rook, Player::Gote));
-    m_board.placePiece(4, 0, createPiece(PieceType::Bishop, Player::Gote));
-    m_board.placePiece(0, 1, createPiece(PieceType::Pawn, Player::Gote));
-    m_board.placePiece(2, 1, createPiece(PieceType::Pawn, Player::Gote));
-    m_board.placePiece(4, 1, createPiece(PieceType::Pawn, Player::Gote));
+    m_board.placePiece(2, minY, createPiece(PieceType::King, Player::Gote));
+    m_board.placePiece(0, minY, createPiece(PieceType::Rook, Player::Gote));
+    m_board.placePiece(4, minY, createPiece(PieceType::Bishop, Player::Gote));
+    m_board.placePiece(0, minY + 1, createPiece(PieceType::Pawn, Player::Gote));
+    m_board.placePiece(2, minY + 1, createPiece(PieceType::Pawn, Player::Gote));
+    m_board.placePiece(4, minY + 1, createPiece(PieceType::Pawn, Player::Gote));
 
     m_currentState = GameState::Playing;
     emit stateChanged(m_currentState);
@@ -146,8 +148,31 @@ std::vector<Move> GameEngine::getLegalMoves(int x, int y) {
     for (int tx = 0; tx < Board::COLS; ++tx) {
         for (int ty = 0; ty < Board::ROWS; ++ty) {
             Move m = Move::makeMove(x, y, tx, ty, piece->getOwner());
-            // 传入 std::nullopt 因为只是预测，不需要考虑上一手的禁手
+            // 因为只是预测，不考虑上一手的禁手
             if (m_ruleEngine.validateMove(m_board, m, std::nullopt)) {
+                moves.push_back(m);
+            }
+        }
+    }
+    return moves;
+}
+
+std::vector<Move> GameEngine::getLegalDrops(PieceType type) {
+    std::vector<Move> moves;
+    Player player = getCurrentPlayer();
+    // 获取上一手被吃掉的棋子 判断打入禁手
+    std::optional<PieceType> forbidden;
+    if (auto lastNode = m_history.peek()) {
+        if (lastNode->capturedType.has_value()) forbidden = lastNode->capturedType.value();
+    }
+
+    for (int x = 0; x < GameConstants::COLS; ++x) {
+        for (int y = 0; y < GameConstants::ROWS; ++y) {
+            // 剪枝：格子非空时 直接跳过
+            if (m_board.getPiece(x, y) != nullptr) continue;
+
+            Move m = Move::makeDrop(x, y, type, player);
+            if (m_ruleEngine.validateMove(m_board, m, forbidden)) {
                 moves.push_back(m);
             }
         }

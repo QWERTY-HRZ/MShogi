@@ -32,9 +32,9 @@ bool RuleEngine::validateDrop(const Board& board, const Move& move, std::optiona
     // 规则：车和相只能放在靠近己方的三行
     if (move.dropType == PieceType::Rook || move.dropType == PieceType::Bishop) {
         if (move.player == Player::Sente) {
-            if (move.toY > 2) return false;
+            if (move.toY > (GameConstants::ROWS - GameConstants::ZONE_HEIGHT)) return false;
         } else {
-            if (move.toY < 3) return false;
+            if (move.toY < GameConstants::ZONE_HEIGHT) return false;
         }
     }
 
@@ -142,7 +142,7 @@ bool RuleEngine::checkPromotion(const Board& board, const Move& move) const {
     if (!piece || piece->getType() != PieceType::Pawn) return false;
 
     int bottomLine = board.getBottomLine(move.player);
-    // 最后判断是否走到底线
+    // 最后判断是否走到对方底线
     return move.toY == bottomLine;
 }
 
@@ -152,20 +152,21 @@ int RuleEngine::isGameOver(Board& board) const {
     bool senteKingAtBottom = false;
     bool goteKingAtBottom = false;
     // 先手为 0，后手为 5
-    int senteBottom = board.getBottomLine(Player::Sente);
-    int goteBottom = board.getBottomLine(Player::Gote);
+    // int senteBottom = GameConstants::GOTE_BASE_Y;
+    // int goteBottom = GameConstants::SENTE_BASE_Y;
 
     // 将死规则判定
-    for (int i = 0; i < Board::COLS; ++i) {
-        for (int j = 0; j < Board::ROWS; ++j) {
+    for (int i = 0; i < GameConstants::COLS; ++i) {
+        for (int j = 0; j < GameConstants::ROWS; ++j) {
             auto p = board.getPiece(i, j);
             if (p && p->getType() == PieceType::King) {
+                // 下底【王到对方底线】
                 if (p->getOwner() == Player::Sente) {
                     senteKingExists = true;
-                    if (j == senteBottom) senteKingAtBottom = true;
+                    if (j == GameConstants::GOTE_BASE_Y) senteKingAtBottom = true;
                 } else {
                     goteKingExists = true;
-                    if (j == goteBottom) goteKingAtBottom = true;
+                    if (j == GameConstants::SENTE_BASE_Y) goteKingAtBottom = true;
                 }
             }
         }

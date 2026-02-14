@@ -1,8 +1,9 @@
 ﻿#include "../include/Board.h"
 
 Board::Board()
-    : m_senteBottomLine(0),
-      m_goteBottomLine(5),
+    // 记录先后手的底线 分别为 5/0
+    : m_senteBottomLine(GameConstants::SENTE_BASE_Y),
+      m_goteBottomLine(GameConstants::GOTE_BASE_Y),
       m_senteFlag(false),
       m_goteFlag(false) {
     // 初始化棋盘
@@ -29,8 +30,8 @@ std::shared_ptr<Piece> Board::getPiece(int x, int y) const {
 
 std::vector<std::pair<int, int>> Board::findPieces(Player p, PieceType type) const {
     std::vector<std::pair<int, int>> positions;
-    for (int x = 0; x < COLS; ++x) {
-        for (int y = 0; y < ROWS; ++y) {
+    for (int x = 0; x < GameConstants::COLS; ++x) {
+        for (int y = 0; y < GameConstants::ROWS; ++y) {
             auto piece = m_grid[x][y];
             if (piece && piece->getOwner() == p && piece->getType() == type) {
                 positions.push_back({x, y});
@@ -66,8 +67,8 @@ bool Board::movePiece(int fromX, int fromY, int toX, int toY) {
 }
 
 int Board::getBottomLine(Player p) const {
-    // 先手为 0，后手为 5
-    return (p == Player::Sente) ? m_senteBottomLine : m_goteBottomLine;
+    // 获取【对方】的底线
+    return (p == Player::Sente) ? GameConstants::GOTE_BASE_Y : GameConstants::SENTE_BASE_Y;
 }
 
 bool Board::getKingInBaseFlag(Player p) const {
