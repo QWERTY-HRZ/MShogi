@@ -46,32 +46,30 @@ void GameScene::drawPieces() {
 }
 
 void GameScene::drawHands() {
-    const auto& board = m_engine->getBoard();
-
-    // Gote (后手) 手驹绘制在上方
+    // 绘制后手手驹区 在上方
     int gX = BOARD_OFFSET_X, gY = 20;
-    const std::vector<PieceType> types = {PieceType::Rook, PieceType::Bishop, PieceType::Pawn, PieceType::Hou};
-
-    for (auto t : types) {
-        int count = board.getHandCount(Player::Gote, t);
-        for (int i = 0; i < count; ++i) {
-            auto item = new PieceItem(t, Player::Gote, PieceItem::InHand, -1, -1, CELL_SIZE);
-            item->setPos(gX, gY);
-            addItem(item);
-            gX += CELL_SIZE + 10;
-        }
+    // 获取棋子列表 直接遍历 后同
+    const auto& goteHand = m_engine->getBoard().getHand(Player::Gote);
+    for (const auto& piece : goteHand) {
+        auto item = new PieceItem(piece->getType(), Player::Gote, PieceItem::InHand, -1, -1, GameConstants::CELL_SIZE);
+        item->setPos(gX, gY);
+        // 检查回合数 为禁手期棋子添加灰色蒙版
+        int t = piece->getTurnsInHand();
+        if (t >= 1 && t <= 3) item->setForbidden(true);
+        addItem(item);
+        gX += GameConstants::CELL_SIZE + 10;
     }
-
-    // Sente (先手) 手驹绘制在下方
+    // 绘制先手手驹区
     int sX = BOARD_OFFSET_X, sY = BOARD_OFFSET_Y + GameConstants::ROWS * CELL_SIZE + 20;
-    for (auto t : types) {
-        int count = board.getHandCount(Player::Sente, t);
-        for (int i = 0; i < count; ++i) {
-            auto item = new PieceItem(t, Player::Sente, PieceItem::InHand, -1, -1, CELL_SIZE);
-            item->setPos(sX, sY);
-            addItem(item);
-            sX += CELL_SIZE + 10;
-        }
+    const auto& senteHand = m_engine->getBoard().getHand(Player::Sente);
+    // 其余逻辑相同
+    for (const auto& piece : senteHand) {
+        auto item = new PieceItem(piece->getType(), Player::Sente, PieceItem::InHand, -1, -1, GameConstants::CELL_SIZE);
+        item->setPos(sX, sY);
+        int t = piece->getTurnsInHand();
+        if (t >= 1 && t <= 3) item->setForbidden(true);
+        addItem(item);
+        sX += GameConstants::CELL_SIZE + 10;
     }
 }
 

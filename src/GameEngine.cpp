@@ -30,43 +30,39 @@ void GameEngine::startGame() {
 }
 
 bool GameEngine::makeMove(const Move& move) {
+    // 游戏状态
     if (m_currentState != GameState::Playing) return false;
-
-    // 1. 获取上一手被吃掉的棋子作为打入禁手（如果存在）
-    std::optional<PieceType> forbidden;
-    if (auto lastNode = m_history.peek()) {
-        if (lastNode->capturedType.has_value()) forbidden = lastNode->capturedType.value();
-    }
-
-    // 2. 验证移动合法性
-    if (!m_ruleEngine.validateMove(m_board, move, forbidden)) return false;
-
-    // 3. 准备状态变量
+    // 验证移动合法性
+    if (!m_ruleEngine.validateMove(m_board, move)) return false;
+    // 预备状态变量
     std::optional<PieceType> capturedOriginalType = std::nullopt;
     bool isPromoted = false;
     bool shouldPromote = false;
 
-    // 4. 执行逻辑
+    // 执行逻辑
     if (move.isDrop) {
+        // 打入 已避开禁手棋子
         if (!m_board.removeFromHand(move.player, move.dropType)) return false;
+        // 此处无需更改回合数 每次加入手驹都会刷新
         m_board.placePiece(move.toX, move.toY, createPiece(move.dropType, move.player));
     } else {
-        // 在移动前判断升变条件，因为需要读取 fromY 的位置
+        // 正常移动 先判断升变
         shouldPromote = m_ruleEngine.checkPromotion(m_board, move);
-
-        // 处理吃子：记录原始类型，并降变存入手驹
+        // 处理吃子
         auto target = m_board.getPiece(move.toX, move.toY);
         if (target) {
             capturedOriginalType = target->getType();
+            // 侯降变回兵
             PieceType handType = (capturedOriginalType.value() == PieceType::Hou)
                                  ? PieceType::Pawn : capturedOriginalType.value();
-            m_board.addToHand(move.player, handType);
+            // 创建棋子实体 用于存储
+            auto newPiece = createPiece(handType, move.player);
+            newPiece->setTurnsInHand(1);
+            m_board.addToHand(newPiece);
         }
-
         // 执行物理移动
         m_board.movePiece(move.fromX, move.fromY, move.toX, move.toY);
-
-        // 如果满足条件，执行升变（替换为 Hou）
+        // 满足条件时升变
         if (shouldPromote) {
             m_board.removePiece(move.toX, move.toY);
             m_board.placePiece(move.toX, move.toY, createPiece(PieceType::Hou, move.player));
@@ -74,14 +70,14 @@ bool GameEngine::makeMove(const Move& move) {
         }
     }
 
-    // 5. 生成记谱（基于移动完成后的最终盘面）
+    // 手驹回合数 +1
+    m_board.updateHandTurns(1);
+    // 基于移动后的盘面 生成记谱
     std::string notation = MoveHistory::generateNotation(m_board, move, m_ruleEngine);
-
-    // 6. 压入历史栈
+    // 压入历史栈 发信号
     m_history.push({move, capturedOriginalType, isPromoted, notation});
     emit moveExecuted(notation);
-
-    // 7. 判定胜负
+    // 判定胜负
     int res = m_ruleEngine.isGameOver(m_board);
     if (res != 0) finishGame(res);
 
@@ -94,31 +90,30 @@ void GameEngine::undo() {
     auto nodeOpt = m_history.pop();
     if (!nodeOpt) return;
     const HistoryNode& node = nodeOpt.value();
+    // 回退时 手驹回合数 -1
+    m_board.updateHandTurns(-1);
 
     if (node.move.isDrop) {
-        // 撤销打入：移除棋子，放回手驹
+        // 撤销打入：重新创建棋子 放回手驹
         m_board.removePiece(node.move.toX, node.move.toY);
-        m_board.addToHand(node.move.player, node.move.dropType);
+        auto p = createPiece(node.move.dropType, node.move.player);
+        // 重置回合数
+        p->setTurnsInHand(0);
+        m_board.addToHand(p);
     } else {
-        // 获取移动后的棋子（可能是升变后的）
-        auto movedPiece = m_board.getPiece(node.move.toX, node.move.toY);
-        m_board.removePiece(node.move.toX, node.move.toY);
-
-        // 推断复原类型：若发生了升变，原类型必为 Pawn，否则保持当前类型
-        PieceType restoreType = node.isPromoted ? PieceType::Pawn : movedPiece->getType();
-
-        // 棋子归位
-        m_board.placePiece(node.move.fromX, node.move.fromY, createPiece(restoreType, node.move.player));
-
-        // 恢复被吃掉的棋子
+        // 重置移动后的棋子
+        auto piece = m_board.removePiece(node.move.toX, node.move.toY);
+        if (node.isPromoted) {
+            piece = createPiece(PieceType::Pawn, node.move.player);
+        }
+        m_board.placePiece(node.move.fromX, node.move.fromY, piece);
+        // 如果有吃子 从手驹区恢复
         if (node.capturedType.has_value()) {
             PieceType originalCapType = node.capturedType.value();
-
-            // 从当前玩家手驹扣除（注意：Hou 在手驹中是 Pawn）
+            // 侯在手驹中是兵
             PieceType handType = (originalCapType == PieceType::Hou) ? PieceType::Pawn : originalCapType;
             m_board.removeFromHand(node.move.player, handType);
-
-            // 归还给敌方（归还原始类型）
+            // 将吃子归还给敌方
             Player enemy = (node.move.player == Player::Sente) ? Player::Gote : Player::Sente;
             m_board.placePiece(node.move.toX, node.move.toY, createPiece(originalCapType, enemy));
         }
@@ -140,16 +135,17 @@ void GameEngine::finishGame(int result) {
 }
 
 std::vector<Move> GameEngine::getLegalMoves(int x, int y) {
+    // 合法移动
     std::vector<Move> moves;
     auto piece = m_board.getPiece(x, y);
     if (!piece) return moves;
 
-    // 遍历棋盘所有格子尝试移动
-    for (int tx = 0; tx < Board::COLS; ++tx) {
-        for (int ty = 0; ty < Board::ROWS; ++ty) {
+    // 遍历棋盘 尝试移动
+    for (int tx = 0; tx < GameConstants::COLS; ++tx) {
+        for (int ty = 0; ty < GameConstants::ROWS; ++ty) {
             Move m = Move::makeMove(x, y, tx, ty, piece->getOwner());
-            // 因为只是预测，不考虑上一手的禁手
-            if (m_ruleEngine.validateMove(m_board, m, std::nullopt)) {
+            // 不传禁手参数
+            if (m_ruleEngine.validateMove(m_board, m)) {
                 moves.push_back(m);
             }
         }
@@ -160,19 +156,14 @@ std::vector<Move> GameEngine::getLegalMoves(int x, int y) {
 std::vector<Move> GameEngine::getLegalDrops(PieceType type) {
     std::vector<Move> moves;
     Player player = getCurrentPlayer();
-    // 获取上一手被吃掉的棋子 判断打入禁手
-    std::optional<PieceType> forbidden;
-    if (auto lastNode = m_history.peek()) {
-        if (lastNode->capturedType.has_value()) forbidden = lastNode->capturedType.value();
-    }
 
     for (int x = 0; x < GameConstants::COLS; ++x) {
         for (int y = 0; y < GameConstants::ROWS; ++y) {
-            // 剪枝：格子非空时 直接跳过
+            // 格子非空时 一定不能打入
             if (m_board.getPiece(x, y) != nullptr) continue;
-
             Move m = Move::makeDrop(x, y, type, player);
-            if (m_ruleEngine.validateMove(m_board, m, forbidden)) {
+            // 撤销禁手调用
+            if (m_ruleEngine.validateMove(m_board, m)) {
                 moves.push_back(m);
             }
         }
@@ -196,8 +187,7 @@ std::shared_ptr<Piece> GameEngine::createPiece(PieceType type, Player owner) {
 }
 
 Player GameEngine::getCurrentPlayer() const {
-    // 默认为先手
+    // 默认为先手 否则返回【上一手玩家的对手】
     if (!m_history.peek().has_value()) return Player::Sente;
-    // 否则返回【上一手玩家的对手】
     return (m_history.peek()->move.player == Player::Sente) ? Player::Gote : Player::Sente;
 }

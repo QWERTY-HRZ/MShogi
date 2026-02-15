@@ -25,16 +25,20 @@ public:
     bool getKingInBaseFlag(Player p) const;
     void setKingInBaseFlag(Player p, bool val);
 
-    // 手中棋子管理
-    void addToHand(Player p, PieceType type);
+    // 手驹区 添加/去除
+    void addToHand(std::shared_ptr<Piece> piece);
     bool removeFromHand(Player p, PieceType type);
-    int getHandCount(Player p, PieceType type) const;
+    // 返回手驹区：改为指针列表
+    const std::vector<std::shared_ptr<Piece>>& getHand(Player p) const;
+    // 新增：更新回合数
+    void updateHandTurns(int delta);
 
     static constexpr int ROWS = GameConstants::ROWS;
     static constexpr int COLS = GameConstants::COLS;
 private:
     std::vector<std::vector<std::shared_ptr<Piece>>> m_grid;
-    std::map<Player, std::map<PieceType, int>> m_hands;
+    // 储存具体棋子对象
+    std::map<Player, std::vector<std::shared_ptr<Piece>>> m_hands;
 
     // 记录底线数据
     int m_senteBottomLine;

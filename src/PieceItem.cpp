@@ -63,6 +63,12 @@ void PieceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
     }
     // 简单的反转文字处理
     painter->drawText(rect, Qt::AlignCenter, text);
+    // 绘制禁手蒙版 半透明灰色
+    if (m_isForbidden) {
+        painter->setBrush(QColor(100, 100, 100, 150));
+        painter->setPen(Qt::NoPen);
+        painter->drawRect(boundingRect());
+    }
 }
 
 void PieceItem::setGridPos(int x, int y) {
@@ -71,11 +77,14 @@ void PieceItem::setGridPos(int x, int y) {
 }
 
 void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
+    // 禁手禁止拖拽
+    if (m_isForbidden) return;
     // 棋子显示轨迹
     if (auto gameScene = dynamic_cast<GameScene*>(scene())) {
         gameScene->toggleHighlight(this);
     }
-    m_dragStartPos = pos(); // 记录起始位置
+    // 记录起始位置
+    m_dragStartPos = pos();
     setCursor(Qt::ClosedHandCursor);
     setZValue(10); // 拖拽时置顶
     QGraphicsObject::mousePressEvent(event);
@@ -84,12 +93,18 @@ void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
 void PieceItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
     setCursor(Qt::OpenHandCursor);
     setZValue(1);
-    QGraphicsObject::mouseReleaseEvent(event);
+    // 如果棋子位移小于最小位移 视为点击 回弹
+    if ((pos() - m_dragStartPos).manhattanLength() < GameConstants::MIN_DRAG_DISTANCE) {
+        setPos(m_dragStartPos);
+        QGraphicsObject::mouseReleaseEvent(event);
+        return;
+    }
 
+    QGraphicsObject::mouseReleaseEvent(event);
     // 通知 Scene 处理落子尝试
     GameScene* scenePtr = dynamic_cast<GameScene*>(scene());
     if (scenePtr) {
-        // 如果处理失败（非法移动），回弹
+        // 如果是非法移动 回弹
         if (!scenePtr->handlePieceDrop(this, event->scenePos())) {
             setPos(m_dragStartPos);
         }

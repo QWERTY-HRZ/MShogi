@@ -2,28 +2,24 @@
 #include <cmath>
 #include <algorithm>
 
-bool RuleEngine::validateMove(const Board& board, const Move& move, std::optional<PieceType> lastCapturedType) const {
+bool RuleEngine::validateMove(const Board& board, const Move& move) const {
     if (!board.isInside(move.toX, move.toY)) return false;
 
     if (move.isDrop) {
-        return validateDrop(board, move, lastCapturedType);
+        // 打入判断 但不再传参
+        return validateDrop(board, move);
     } else {
-        // 判断坐标是否合法
         if (!board.isInside(move.fromX, move.fromY)) return false;
+        // 普通移动判断
         return validateNormalMove(board, move);
     }
 }
 
-bool RuleEngine::validateDrop(const Board& board, const Move& move, std::optional<PieceType> forbidden) const {
-    // 格子不为空时不允许打入
+bool RuleEngine::validateDrop(const Board& board, const Move& move) const {
+    // 只允许打入空格
     if (board.getPiece(move.toX, move.toY) != nullptr) return false;
-
-    // 上回合吃掉的棋子不允许打入
-    if (forbidden.has_value() && move.dropType == forbidden.value()) {
-        return false;
-    }
-
-    // 规则：侯打入时变回兵
+    // 不在此处限制打入回合数
+    // 侯打入时变回兵
     if (move.dropType == PieceType::Hou) return false;
 
     int bottomLine = board.getBottomLine(move.player);
@@ -32,9 +28,9 @@ bool RuleEngine::validateDrop(const Board& board, const Move& move, std::optiona
     // 规则：车和相只能放在靠近己方的三行
     if (move.dropType == PieceType::Rook || move.dropType == PieceType::Bishop) {
         if (move.player == Player::Sente) {
-            if (move.toY > (GameConstants::ROWS - GameConstants::ZONE_HEIGHT)) return false;
-        } else {
             if (move.toY < GameConstants::ZONE_HEIGHT) return false;
+        } else {
+            if (move.toY >= GameConstants::ZONE_HEIGHT) return false;
         }
     }
 

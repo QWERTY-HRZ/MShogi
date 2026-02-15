@@ -80,25 +80,61 @@ void Board::setKingInBaseFlag(Player p, bool val) {
     else m_goteFlag = val;
 }
 
-void Board::addToHand(Player p, PieceType type) {
-    m_hands[p][type]++;
+void Board::addToHand(std::shared_ptr<Piece> piece) {
+    // 存入手驹
+    if (piece) m_hands[piece->getOwner()].push_back(piece);
 }
 
 bool Board::removeFromHand(Player p, PieceType type) {
-    if (m_hands[p][type] > 0) {
-        m_hands[p][type]--;
-        return true;
+    // 移除手驹区棋子 但禁手棋子不能动
+    auto& list = m_hands[p];
+    for (auto it = list.begin(); it != list.end(); ++it) {
+        if ((*it)->getType() == type) {
+            int t = (*it)->getTurnsInHand();
+            // 如果不在禁手期 移除该棋子
+            if (t == 0 || t > 3) {
+                list.erase(it);
+                return true;
+            }
+        }
+    }
+    // 如果没有可用的，强制移除第一个同类 (理论上 UI 会拦截，此处兜底)
+    for (auto it = list.begin(); it != list.end(); ++it) {
+        if ((*it)->getType() == type) {
+            list.erase(it);
+            return true;
+        }
     }
     return false;
 }
 
-int Board::getHandCount(Player p, PieceType type) const {
+const std::vector<std::shared_ptr<Piece>>& Board::getHand(Player p) const {
+    // 获取手驹区棋子 不止是数量
+    static const std::vector<std::shared_ptr<Piece>> empty;
     auto it = m_hands.find(p);
-    if (it != m_hands.end()) {
-        auto typeIt = it->second.find(type);
-        if (typeIt != it->second.end()) {
-            return typeIt->second;
+    return (it != m_hands.end()) ? it->second : empty;
+}
+
+void Board::updateHandTurns(int delta) {
+    // 批量增加手驹区回合数
+    for (auto& kv : m_hands) {
+        for (std::shared_ptr<Piece> p : kv.second) {
+            // p 是 piece 的指针
+            if (delta > 0) p->incrementTurnsInHand();
+            // 撤回时 重置回合数
+            else p->decrementTurnsInHand();
         }
     }
-    return 0;
 }
+
+//int Board::getHandCount(Player p, PieceType type) const {
+//    // 旧逻辑 拟去除
+//    auto it = m_hands.find(p);
+//    if (it != m_hands.end()) {
+//        auto typeIt = it->second.find(type);
+//        if (typeIt != it->second.end()) {
+//            return typeIt->second;
+//        }
+//    }
+//    return 0;
+//}

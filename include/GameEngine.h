@@ -49,7 +49,6 @@ private:
     Board m_board;
     RuleEngine m_ruleEngine;
     MoveHistory m_history;
-
     // 辅助工厂方法：创建棋子实例
     std::shared_ptr<Piece> createPiece(PieceType type, Player owner);
 };

@@ -1,4 +1,4 @@
-#ifndef PIECE_H
+﻿#ifndef PIECE_H
 #define PIECE_H
 
 #endif // PIECE_H
@@ -27,10 +27,16 @@ public:
     Player getOwner() const { return m_owner; }
     PieceType getType() const { return m_type; }
     virtual std::string getName() const = 0;
+    // 手鞠管理
+    void setTurnsInHand(int v) { m_turnsInHand = v; }
+    void incrementTurnsInHand() { m_turnsInHand++; }
+    void decrementTurnsInHand() { if (m_turnsInHand > 0) m_turnsInHand--; } // Undo用
+    int getTurnsInHand() const { return m_turnsInHand; }
 
 protected:
     Player m_owner;
     PieceType m_type;
+    int m_turnsInHand = 0;
 };
 
 class King : public Piece {

@@ -28,10 +28,8 @@ class RuleEngine {
 public:
     RuleEngine() = default;
 
-    // 判定行子是否合法
-    bool validateMove(const Board& board, const Move& move,
-                      std::optional<PieceType> lastCapturedType = std::nullopt) const;
-
+    // 行子是否合法 移除 forbidden 参数
+    bool validateMove(const Board& board, const Move& move) const;
     // 判定升变
     bool checkPromotion(const Board& board, const Move& move) const;
 
@@ -40,8 +38,8 @@ public:
 
 private:
     bool validateNormalMove(const Board& board, const Move& move) const;
-    bool validateDrop(const Board& board, const Move& move, std::optional<PieceType> forbidden) const;
-
+    // 打入是否合法
+    bool validateDrop(const Board& board, const Move& move) const;
     bool canKingMove(int dx, int dy) const;
     bool canRookMove(const Board& board, const Move& move, int dx, int dy) const;
     bool canBishopMove(const Board& board, const Move& move, int dx, int dy) const;

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <QGraphicsObject>
 #include <QBrush>
@@ -27,6 +27,9 @@ public:
 
     // 更新网格位置 (不立即改变坐标，等待刷新)
     void setGridPos(int x, int y);
+    // 更新禁手状态
+    void setForbidden(bool val) { m_isForbidden = val; update(); }
+    bool isForbidden() const { return m_isForbidden; }
 
 protected:
     void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
@@ -41,4 +44,6 @@ private:
     int m_cellSize;
     
     QPointF m_dragStartPos; // 记录拖拽前的场景坐标，用于回弹
+    // 私有接口 记录禁手
+    bool m_isForbidden = false;
 };

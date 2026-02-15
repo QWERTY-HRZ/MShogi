@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include "../include/RuleEngine.h"
 #include "../include/Board.h"
 #include "../include/Piece.h"
@@ -119,8 +119,7 @@ TEST_F(RuleEngineTest, DropRules) {
     
     // 4. 禁手 (上一回合刚被吃的子)
     EXPECT_FALSE(engine.validateMove(board, 
-        Move::makeDrop(2, 2, PieceType::Pawn, Player::Sente), 
-        PieceType::Pawn // lastCaptured
+        Move::makeDrop(2, 2, PieceType::Pawn, Player::Sente)
     ));
 }
 

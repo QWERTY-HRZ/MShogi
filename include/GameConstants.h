@@ -17,4 +17,7 @@ namespace GameConstants {
     // UI 棋盘偏移
     static constexpr int BOARD_OFFSET_X = 50;
     static constexpr int BOARD_OFFSET_Y = 150;
+
+    // 拖拽的X/Y轴最小位移 小于此值视为点击
+    static constexpr double MIN_DRAG_DISTANCE = 15.0;
 }
