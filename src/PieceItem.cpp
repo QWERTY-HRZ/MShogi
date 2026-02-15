@@ -65,9 +65,10 @@ void PieceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidg
     painter->drawText(rect, Qt::AlignCenter, text);
     // 绘制禁手蒙版 半透明灰色
     if (m_isForbidden) {
-        painter->setBrush(QColor(100, 100, 100, 150));
+        painter->setBrush(QColor(167, 167, 167, 150));
         painter->setPen(Qt::NoPen);
-        painter->drawRect(boundingRect());
+        // 蒙版和棋子形状一致
+        painter->drawPolygon(shape);
     }
 }
 
@@ -77,8 +78,11 @@ void PieceItem::setGridPos(int x, int y) {
 }
 
 void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
-    // 禁手禁止拖拽
-    if (m_isForbidden) return;
+    // 对禁手 阻止事件传播 直接返回
+    if (m_isForbidden) {
+        event->accept();
+        return;
+    }
     // 棋子显示轨迹
     if (auto gameScene = dynamic_cast<GameScene*>(scene())) {
         gameScene->toggleHighlight(this);
@@ -91,6 +95,10 @@ void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
 }
 
 void PieceItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
+    if (m_isForbidden) {
+        event->accept();
+        return;
+    }
     setCursor(Qt::OpenHandCursor);
     setZValue(1);
     // 如果棋子位移小于最小位移 视为点击 回弹
@@ -111,4 +119,22 @@ void PieceItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
     } else {
         setPos(m_dragStartPos);
     }
+}
+
+void PieceItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
+    // 处理鼠标移动 对禁手同理
+    if (m_isForbidden) {
+        event->accept();
+        return;
+    }
+    QGraphicsObject::mouseMoveEvent(event);
+}
+
+void PieceItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
+    // 处理鼠标双击 对禁手同理
+    if (m_isForbidden) {
+        event->accept();
+        return;
+    }
+    QGraphicsObject::mouseDoubleClickEvent(event);
 }
