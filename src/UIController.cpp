@@ -70,6 +70,14 @@ void UIController::setupUi() {
     connect(btnUndo, &QPushButton::clicked, m_gameEngine, &GameEngine::undo);
     sideLayout->addWidget(btnUndo);
 
+    QPushButton* btnRestart = new QPushButton("重新开始");
+    connect(btnRestart, &QPushButton::clicked, this, &UIController::onRestartClicked);
+    sideLayout->addWidget(btnRestart);
+
+    QPushButton* btnResign = new QPushButton("认输");
+    connect(btnResign, &QPushButton::clicked, this, &UIController::onResignClicked);
+    sideLayout->addWidget(btnResign);
+
     mainLayout->addLayout(sideLayout, 1);
     resize(1024, 768);
 }
@@ -106,7 +114,7 @@ void UIController::onMoveExecuted(const std::string& notation) {
     m_currentPlayer = (m_currentPlayer == Player::Sente) ? Player::Gote : Player::Sente;
 
     QString turnText = (m_currentPlayer == Player::Sente) ? "状态: 先手回合" : "状态: 后手回合";
-    QString colorStyle = (m_currentPlayer == Player::Sente) ? "color: black;" : "color: red;";
+    QString colorStyle = (m_currentPlayer == Player::Sente) ? "color: red;" : "color: blue;";
 
     m_lblStatus->setText(turnText);
     m_lblStatus->setStyleSheet(colorStyle + "font-weight: bold;");
@@ -128,24 +136,55 @@ void UIController::updateTimer() {
 
 // 处理悔棋时 UI 变化
 void UIController::onUndoExecuted() {
-    // 1. 立即刷新棋盘视图
+    // 刷新棋盘视图
     m_scene->refreshBoard();
-
-    // 2. 将执子权切回给上一位玩家
+    // 切回上一位玩家
     m_currentPlayer = (m_currentPlayer == Player::Sente) ? Player::Gote : Player::Sente;
-
-    // 3. 更新状态栏文本和颜色
+    // 更新状态栏文本/颜色
     QString turnText = (m_currentPlayer == Player::Sente) ? "状态: 先手回合" : "状态: 后手回合";
     QString colorStyle = (m_currentPlayer == Player::Sente) ? "color: black;" : "color: red;";
     m_lblStatus->setText(turnText);
     m_lblStatus->setStyleSheet(colorStyle + "font-weight: bold;");
-
-    // 从棋谱记录中删除最后一行
+    // 回退棋谱 移动光标到文末/删除选中内容
     QTextCursor cursor = m_txtHistory->textCursor();
-    // 移动光标到文末
     cursor.movePosition(QTextCursor::End);
     cursor.select(QTextCursor::BlockUnderCursor);
-    // 删除选中内容
     cursor.removeSelectedText();
     cursor.deleteChar();
+}
+
+void UIController::onRestartClicked() {
+    // 弹出确认对话框
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this, "重新开始", "确定要重置当前对局吗？",
+                                  QMessageBox::Yes | QMessageBox::No);
+    if (reply == QMessageBox::Yes) {
+        // 重置计时器数据
+        m_secondsElapsed = 0;
+        updateTimer();
+        // 清空棋谱
+        m_txtHistory->clear();
+        // 重置当前执子方为先手
+        m_currentPlayer = Player::Sente;
+        // 重置棋盘数据
+        m_gameEngine->startGame();
+        // 刷新状态栏
+        m_lblStatus->setText("状态: 先手回合");
+        m_lblStatus->setStyleSheet("color: black; font-weight: bold;");
+    }
+}
+
+void UIController::onResignClicked() {
+    // 只有游戏中才能认输
+    if (m_gameEngine->getCurrentState() != GameState::Playing) return;
+    // 确认按钮
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this, "认输", "确定要投降吗？", QMessageBox::Yes | QMessageBox::No);
+
+    if (reply == QMessageBox::Yes) {
+        // 判定胜负：当前回合方认输，则对方获胜
+        int result = (m_currentPlayer == Player::Sente) ? 2 : 1;
+        // 调用引擎结束游戏
+        m_gameEngine->finishGame(result);
+    }
 }

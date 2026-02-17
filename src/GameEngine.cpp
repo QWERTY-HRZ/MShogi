@@ -97,8 +97,8 @@ void GameEngine::undo() {
         // 撤销打入：重新创建棋子 放回手驹
         m_board.removePiece(node.move.toX, node.move.toY);
         auto p = createPiece(node.move.dropType, node.move.player);
-        // 重置回合数
-        p->setTurnsInHand(0);
+        // 注意：确保拿回来的手驹可用 这里简单设置回合数大于 3
+        p->setTurnsInHand(4);
         m_board.addToHand(p);
     } else {
         // 重置移动后的棋子

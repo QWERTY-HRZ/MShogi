@@ -23,6 +23,10 @@ private slots:
     void updateTimer();
     // 悔棋槽函数
     void onUndoExecuted();
+    // 重新开始按钮
+    void onRestartClicked();
+    // 认输按钮
+    void onResignClicked();
 
 private:
     void setupUi();
