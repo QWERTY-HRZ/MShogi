@@ -3,9 +3,10 @@
 #include <QVBoxLayout>
 #include <QGroupBox>
 #include <QMessageBox>
+#include <QInputDialog>
 
 UIController::UIController(QWidget *parent)
-    : QMainWindow(parent), m_secondsElapsed(0), m_currentPlayer(Player::Sente)
+    : QMainWindow(parent), m_secondsElapsed(0)
 {
     m_gameEngine = new GameEngine(this);
     m_scene = new GameScene(m_gameEngine, this);
@@ -16,23 +17,20 @@ UIController::UIController(QWidget *parent)
     });
 
     setupUi();
-
+    // 连接信号
     connect(m_gameEngine, &GameEngine::stateChanged, this, &UIController::onStateChanged);
     connect(m_gameEngine, &GameEngine::moveExecuted, this, &UIController::onMoveExecuted);
     connect(m_gameEngine, &GameEngine::gameEnded, this, &UIController::onGameEnded);
-    // 连接悔棋信号
     connect(m_gameEngine, &GameEngine::undoExecuted, this, &UIController::onUndoExecuted);
+    connect(m_gameEngine->getClock(), &ChessClock::timeUpdated, this, &UIController::onUpdateTimer);
 
-    m_timer = new QTimer(this);
-    connect(m_timer, &QTimer::timeout, this, &UIController::updateTimer);
-
-    m_gameEngine->startGame();
+    m_uiTimer = new QTimer(this);
+    connect(m_uiTimer, &QTimer::timeout, this, &UIController::onUpdateTimer);
+    // 默认开局：5+5
+    m_gameEngine->startGame(300, 5);
 }
 
 bool UIController::handleMoveRequest(const Move& move) {
-    // 校验轮次：只能操作己方棋子
-    if (move.player != m_currentPlayer) return false;
-
     return m_gameEngine->makeMove(move);
 }
 
@@ -47,25 +45,34 @@ void UIController::setupUi() {
     mainLayout->addWidget(m_view, 2);
 
     QVBoxLayout* sideLayout = new QVBoxLayout();
-
     QGroupBox* statusGroup = new QGroupBox("对局信息");
     QVBoxLayout* statusLayout = new QVBoxLayout(statusGroup);
+    // 重构状态栏
     m_lblStatus = new QLabel("状态: 初始化");
-    m_lblTimer = new QLabel("时间: 00:00");
-    QFont font = m_lblTimer->font();
-    font.setPointSize(14);
-    m_lblTimer->setFont(font);
+    m_lblGameInfo = new QLabel("总用时: 00:00 | 棋钟: -- 分 + --");
+    m_lblSenteTurn = new QLabel("先手回合：--");
+    m_lblGoteTurn = new QLabel("后手回合：--");
+    // 字体大小
+    QFont font = m_lblStatus->font();
+    font.setPointSize(12);
+    m_lblStatus->setFont(font);
+    m_lblGameInfo->setFont(font);
+    m_lblSenteTurn->setFont(font);
+    m_lblGoteTurn->setFont(font);
+    // 调整边框
     statusLayout->addWidget(m_lblStatus);
-    statusLayout->addWidget(m_lblTimer);
+    statusLayout->addWidget(m_lblGameInfo);
+    statusLayout->addWidget(m_lblSenteTurn);
+    statusLayout->addWidget(m_lblGoteTurn);
     sideLayout->addWidget(statusGroup);
-
+    // 行棋记录
     QGroupBox* historyGroup = new QGroupBox("棋谱");
     QVBoxLayout* historyLayout = new QVBoxLayout(historyGroup);
     m_txtHistory = new QTextEdit();
     m_txtHistory->setReadOnly(true);
     historyLayout->addWidget(m_txtHistory);
     sideLayout->addWidget(historyGroup);
-
+    // 按钮
     QPushButton* btnUndo = new QPushButton("悔棋");
     connect(btnUndo, &QPushButton::clicked, m_gameEngine, &GameEngine::undo);
     sideLayout->addWidget(btnUndo);
@@ -79,7 +86,7 @@ void UIController::setupUi() {
     sideLayout->addWidget(btnResign);
 
     mainLayout->addLayout(sideLayout, 1);
-    resize(1024, 768);
+    resize(1280, 960);
 }
 
 void UIController::resizeEvent(QResizeEvent* event) {
@@ -91,61 +98,29 @@ void UIController::onStateChanged(GameState newState) {
     m_scene->refreshBoard();
     switch (newState) {
         case GameState::Playing:
-            // 删除强制重置为先手的代码 防止影响悔棋逻辑
+            // 不在此处修改行棋顺序
             // m_currentPlayer = Player::Sente;
-            // 行棋次序只由 onMoveExecuted/onUndoExecuted 更新
-            if (m_lblStatus->text() == "状态: 初始化" || m_lblStatus->text() == "状态: 结束") {
-                 m_lblStatus->setText("状态: 对局中");
-            }
-
-            if (!m_timer->isActive()) m_timer->start(1000);
+            m_lblStatus->setText("状态: 对局中");
+            if (!m_uiTimer->isActive()) m_uiTimer->start(1000);
             break;
         case GameState::End:
             m_lblStatus->setText("状态: 结束");
-            m_timer->stop();
+            m_uiTimer->stop();
             break;
         default: break;
     }
+    onUpdateTimer();
 }
 
+// 精简 状态修改放到 onUpdateTimer
 void UIController::onMoveExecuted(const std::string& notation) {
     m_txtHistory->append(QString::fromStdString(notation));
-    // 切换回合
-    m_currentPlayer = (m_currentPlayer == Player::Sente) ? Player::Gote : Player::Sente;
-
-    QString turnText = (m_currentPlayer == Player::Sente) ? "状态: 先手回合" : "状态: 后手回合";
-    QString colorStyle = (m_currentPlayer == Player::Sente) ? "color: red;" : "color: blue;";
-
-    m_lblStatus->setText(turnText);
-    m_lblStatus->setStyleSheet(colorStyle + "font-weight: bold;");
-
     m_scene->refreshBoard();
 }
 
-void UIController::onGameEnded(int result) {
-    QString msg = (result == 1) ? "先手获胜！" : "后手获胜！";
-    QMessageBox::information(this, "对局结束", msg);
-}
-
-void UIController::updateTimer() {
-    m_secondsElapsed++;
-    int min = m_secondsElapsed / 60;
-    int sec = m_secondsElapsed % 60;
-    m_lblTimer->setText(QString("时间: %1:%2").arg(min, 2, 10, QChar('0')).arg(sec, 2, 10, QChar('0')));
-}
-
-// 处理悔棋时 UI 变化
+// 精简 状态修改放到 onUpdateTimer
 void UIController::onUndoExecuted() {
-    // 刷新棋盘视图
     m_scene->refreshBoard();
-    // 切回上一位玩家
-    m_currentPlayer = (m_currentPlayer == Player::Sente) ? Player::Gote : Player::Sente;
-    // 更新状态栏文本/颜色
-    QString turnText = (m_currentPlayer == Player::Sente) ? "状态: 先手回合" : "状态: 后手回合";
-    QString colorStyle = (m_currentPlayer == Player::Sente) ? "color: black;" : "color: red;";
-    m_lblStatus->setText(turnText);
-    m_lblStatus->setStyleSheet(colorStyle + "font-weight: bold;");
-    // 回退棋谱 移动光标到文末/删除选中内容
     QTextCursor cursor = m_txtHistory->textCursor();
     cursor.movePosition(QTextCursor::End);
     cursor.select(QTextCursor::BlockUnderCursor);
@@ -153,24 +128,66 @@ void UIController::onUndoExecuted() {
     cursor.deleteChar();
 }
 
+void UIController::onGameEnded(int result) {
+    QString msg = (result == 1) ? "先手获胜！" : "后手获胜！";
+    QMessageBox::information(this, "对局结束", msg);
+}
+
+void UIController::onUpdateTimer() {
+    // 仅通过系统定时器累计总用时，避免重复触发棋钟信号
+    if (m_gameEngine->getCurrentState() == GameState::Playing && sender() == m_uiTimer) {
+        m_secondsElapsed++;
+    }
+    // 总用时规则
+    int totalM = m_secondsElapsed / 60, totalS = m_secondsElapsed % 60;
+    int settingM = m_gameEngine->getClock()->getTotalSetting() / 60;
+    int inc = m_gameEngine->getClock()->getIncrement();
+    // 设置时长/棋钟
+    m_lblGameInfo->setText(QString("总用时: %1:%2 | 棋钟: %3分+%4秒")
+                           .arg(totalM, 2, 10, QChar('0')).arg(totalS, 2, 10, QChar('0'))
+                           .arg(settingM).arg(inc));
+
+    // 获取棋钟数据
+    int sTime = m_gameEngine->getClock()->getSenteTime();
+    int gTime = m_gameEngine->getClock()->getGoteTime();
+    Player curP = m_gameEngine->getCurrentPlayer();
+    bool isPlaying = (m_gameEngine->getCurrentState() == GameState::Playing);
+
+    // 第三/四行：剩余时间
+    m_lblSenteTurn->setText(QString("先手回合：剩余 %1:%2")
+                            .arg(sTime / 60, 2, 10, QChar('0')).arg(sTime % 60, 2, 10, QChar('0')));
+    m_lblGoteTurn->setText(QString("后手回合：剩余 %1:%2")
+                           .arg(gTime / 60, 2, 10, QChar('0')).arg(gTime % 60, 2, 10, QChar('0')));
+
+    // 根据回合 加粗/改变背景色
+    QString baseSente = "color: red;";
+    QString baseGote = "color: black;";
+
+    if (isPlaying && curP == Player::Sente) {
+        m_lblSenteTurn->setStyleSheet(baseSente + " font-weight: bold; background: #ffe0e0;");
+        m_lblGoteTurn->setStyleSheet(baseGote + " font-weight: normal; background: none;");
+    } else if (isPlaying && curP == Player::Gote) {
+        m_lblSenteTurn->setStyleSheet(baseSente + " font-weight: normal; background: none;");
+        m_lblGoteTurn->setStyleSheet(baseGote + " font-weight: bold; background: #e0e0e0;");
+    } else {
+        m_lblSenteTurn->setStyleSheet(baseSente);
+        m_lblGoteTurn->setStyleSheet(baseGote);
+    }
+}
+
 void UIController::onRestartClicked() {
-    // 弹出确认对话框
-    QMessageBox::StandardButton reply;
-    reply = QMessageBox::question(this, "重新开始", "确定要重置当前对局吗？",
-                                  QMessageBox::Yes | QMessageBox::No);
+    // 二次确认
+    auto reply = QMessageBox::question(this, "重新开始", "确定重置对局吗？", QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
-        // 重置计时器数据
+        bool ok;
+        int tMin = QInputDialog::getInt(this, "设置", "总时长(分钟):", 10, 1, 120, 1, &ok);
+        if (!ok) return;
+        int tInc = QInputDialog::getInt(this, "设置", "每步奖励(秒):", 10, 0, 60, 1, &ok);
+        if (!ok) return;
+
         m_secondsElapsed = 0;
-        updateTimer();
-        // 清空棋谱
         m_txtHistory->clear();
-        // 重置当前执子方为先手
-        m_currentPlayer = Player::Sente;
-        // 重置棋盘数据
-        m_gameEngine->startGame();
-        // 刷新状态栏
-        m_lblStatus->setText("状态: 先手回合");
-        m_lblStatus->setStyleSheet("color: black; font-weight: bold;");
+        m_gameEngine->startGame(tMin * 60, tInc); // 调用引擎重启
     }
 }
 
@@ -183,7 +200,7 @@ void UIController::onResignClicked() {
 
     if (reply == QMessageBox::Yes) {
         // 判定胜负：当前回合方认输，则对方获胜
-        int result = (m_currentPlayer == Player::Sente) ? 2 : 1;
+        int result = (m_gameEngine->getCurrentPlayer() == Player::Sente) ? 2 : 1;
         // 调用引擎结束游戏
         m_gameEngine->finishGame(result);
     }

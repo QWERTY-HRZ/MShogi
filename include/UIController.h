@@ -20,7 +20,9 @@ private slots:
     void onStateChanged(GameState newState);
     void onMoveExecuted(const std::string& notation);
     void onGameEnded(int result);
-    void updateTimer();
+
+    // 统一更新时间、改变先后手
+    void onUpdateTimer();
     // 悔棋槽函数
     void onUndoExecuted();
     // 重新开始按钮
@@ -37,12 +39,17 @@ private:
     GameScene* m_scene;
     QGraphicsView* m_view;
 
-    QLabel* m_lblStatus;
-    QLabel* m_lblTimer;
+    QLabel* m_lblStatus;      // 第一行: 对局状态
+    QLabel* m_lblGameInfo;    // 第二行: 总用时与设置
+    QLabel* m_lblSenteTurn;   // 第三行: 先手时间
+    QLabel* m_lblGoteTurn;    // 第四行: 后手时间
+    // [删除] QLabel* m_lblTimer;
+
+
     QTextEdit* m_txtHistory;
-    QTimer* m_timer;
+    QTimer* m_uiTimer;
     int m_secondsElapsed;
 
-    // 记录当前执子方
-    Player m_currentPlayer;
+    // 不再记录当前玩家 而是从 gameEngine 直接获取
+    // Player m_currentPlayer;
 };

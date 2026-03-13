@@ -1,14 +1,18 @@
 ﻿#include "../include/GameEngine.h"
 
 GameEngine::GameEngine(QObject *parent)
-    : QObject(parent), m_currentState(GameState::Init) {}
+    : QObject(parent), m_currentState(GameState::Init), m_clock(new ChessClock(this))
+{
+    // 绑定棋钟超时信号
+    connect(m_clock, &ChessClock::timeout, this, &GameEngine::onClockTimeout);
+}
 
-void GameEngine::startGame() {
+void GameEngine::startGame(int totalTime, int increment) {
     m_board.clear();
     const int maxY = GameConstants::SENTE_BASE_Y;
     const int minY = GameConstants::GOTE_BASE_Y;
 
-    // Sente (先手，位于下方 Y=4,5，从下往上攻)
+    // Sente (先手，Y=4,5，从下往上攻)
     m_board.placePiece(2, maxY, createPiece(PieceType::King, Player::Sente));
     m_board.placePiece(0, maxY, createPiece(PieceType::Bishop, Player::Sente));
     m_board.placePiece(4, maxY, createPiece(PieceType::Rook, Player::Sente));
@@ -16,8 +20,7 @@ void GameEngine::startGame() {
     m_board.placePiece(2, maxY - 1, createPiece(PieceType::Pawn, Player::Sente));
     m_board.placePiece(4, maxY - 1, createPiece(PieceType::Pawn, Player::Sente));
 
-    // Gote (后手，位于上方 Y=0,1，从上往下攻)
-    // 对应Sente
+    // Gote (后手，Y=0,1，从上往下攻)
     m_board.placePiece(2, minY, createPiece(PieceType::King, Player::Gote));
     m_board.placePiece(0, minY, createPiece(PieceType::Rook, Player::Gote));
     m_board.placePiece(4, minY, createPiece(PieceType::Bishop, Player::Gote));
@@ -26,7 +29,14 @@ void GameEngine::startGame() {
     m_board.placePiece(4, minY + 1, createPiece(PieceType::Pawn, Player::Gote));
 
     m_currentState = GameState::Playing;
+    // 启动棋钟
+    m_clock->start(totalTime, increment, Player::Sente);
     emit stateChanged(m_currentState);
+}
+
+void GameEngine::onClockTimeout(Player loser) {
+    // 先手超时判后手胜
+    finishGame(loser == Player::Sente ? 2 : 1);
 }
 
 bool GameEngine::makeMove(const Move& move) {
@@ -74,8 +84,13 @@ bool GameEngine::makeMove(const Move& move) {
     m_board.updateHandTurns(1);
     // 基于移动后的盘面 生成记谱
     std::string notation = MoveHistory::generateNotation(m_board, move, m_ruleEngine);
+    // 加奖励用时
+    m_clock->addIncrement(move.player);
     // 压入历史栈 发信号
-    m_history.push({move, capturedOriginalType, isPromoted, notation});
+    m_history.push({move, capturedOriginalType, isPromoted, notation,
+                        m_clock->getSenteTime(), m_clock->getGoteTime()});
+    // 切棋钟
+    m_clock->switchTurn((move.player == Player::Sente) ? Player::Gote : Player::Sente);
     emit moveExecuted(notation);
     // 判定胜负
     int res = m_ruleEngine.isGameOver(m_board);
@@ -118,6 +133,14 @@ void GameEngine::undo() {
             m_board.placePiece(node.move.toX, node.move.toY, createPiece(originalCapType, enemy));
         }
     }
+    // 恢复时间并切换回合
+    if (auto prevNode = m_history.peek()) {
+            Player prevPlayer = (prevNode->move.player == Player::Sente) ? Player::Gote : Player::Sente;
+            m_clock->setTime(prevNode->senteTimeLeft, prevNode->goteTimeLeft, prevPlayer);
+        } else {
+            // 退回到了开局
+            m_clock->start(m_clock->getTotalSetting(), m_clock->getIncrement(), Player::Sente);
+        }
 
     // 如果从结束状态回退，改变状态
     if (m_currentState == GameState::End) {
@@ -130,6 +153,7 @@ void GameEngine::undo() {
 
 void GameEngine::finishGame(int result) {
     m_currentState = GameState::End;
+    m_clock->stop();
     emit stateChanged(m_currentState);
     emit gameEnded(result);
 }
@@ -187,7 +211,7 @@ std::shared_ptr<Piece> GameEngine::createPiece(PieceType type, Player owner) {
 }
 
 Player GameEngine::getCurrentPlayer() const {
-    // 默认为先手 否则返回【上一手玩家的对手】
+    // 默认为先手 否则返回上一手玩家的对手
     if (!m_history.peek().has_value()) return Player::Sente;
     return (m_history.peek()->move.player == Player::Sente) ? Player::Gote : Player::Sente;
 }

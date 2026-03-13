@@ -6,6 +6,7 @@
     Movehistory.cpp
     PieceItem.cpp
     GameScene.cpp
+    ChessClock.cpp
 )
 
 set(MSHOGI_LIB_HEADERS
@@ -18,6 +19,7 @@ set(MSHOGI_LIB_HEADERS
     ../include/PieceItem.h
     ../include/GameScene.h
     ../include/GameConstants.h
+    ../include/ChessClock.h
 )
 
 add_library(MShogiLib STATIC

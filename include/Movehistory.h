@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <vector>
 #include <string>
@@ -13,6 +13,9 @@ struct HistoryNode {
     bool isPromoted;
     // 记谱文本
     std::string notation;
+    // 双方剩余时间
+    int senteTimeLeft;
+    int goteTimeLeft;
 };
 
 class MoveHistory {
