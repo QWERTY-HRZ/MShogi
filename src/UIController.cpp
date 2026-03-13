@@ -6,7 +6,7 @@
 #include <QInputDialog>
 
 UIController::UIController(QWidget *parent)
-    : QMainWindow(parent), m_secondsElapsed(0)
+    : QMainWindow(parent)
 {
     m_gameEngine = new GameEngine(this);
     m_scene = new GameScene(m_gameEngine, this);
@@ -24,8 +24,6 @@ UIController::UIController(QWidget *parent)
     connect(m_gameEngine, &GameEngine::undoExecuted, this, &UIController::onUndoExecuted);
     connect(m_gameEngine->getClock(), &ChessClock::timeUpdated, this, &UIController::onUpdateTimer);
 
-    m_uiTimer = new QTimer(this);
-    connect(m_uiTimer, &QTimer::timeout, this, &UIController::onUpdateTimer);
     // UI 渲染完后，设置游戏时长
     QTimer::singleShot(0, this, &UIController::promptSettingsAndStart);
 }
@@ -101,7 +99,6 @@ void UIController::promptSettingsAndStart() {
     int tInc = QInputDialog::getInt(this, "游戏设置", "每步奖励(秒，默认为 5):", 5, 0, 60, 1, &ok);
     if (!ok) tInc = 5;
 
-    m_secondsElapsed = 0;
     m_txtHistory->clear();
     m_gameEngine->startGame(tMin * 60, tInc);
 }
@@ -112,30 +109,28 @@ void UIController::resizeEvent(QResizeEvent* event) {
 }
 
 void UIController::onStateChanged(GameState newState) {
+    // 不在 UI 中操控定时
     m_scene->refreshBoard();
     switch (newState) {
         case GameState::Playing:
             m_lblStatus->setText("状态: 对局中");
             m_btnPauseResume->setText("暂停");
             m_btnPauseResume->setEnabled(true);
-            if (!m_uiTimer->isActive()) m_uiTimer->start(1000);
             break;
         case GameState::Paused:
             m_lblStatus->setText("状态: 已暂停");
             m_btnPauseResume->setText("继续");
-            m_uiTimer->stop();
             break;
         case GameState::End:
             m_lblStatus->setText("状态: 结束");
             m_btnPauseResume->setEnabled(false);
-            m_uiTimer->stop();
             break;
         default: break;
     }
     onUpdateTimer();
 }
 
-// 精简 状态修改放到 onUpdateTimer
+// 状态修改放到 onUpdateTimer
 void UIController::onMoveExecuted(const std::string& notation) {
     m_txtHistory->append(QString::fromStdString(notation));
     m_scene->refreshBoard();
@@ -147,12 +142,11 @@ void UIController::onGameEnded(int result) {
 }
 
 void UIController::onUpdateTimer() {
-    // 仅通过系统定时器累计总用时，避免重复触发棋钟信号
-    if (m_gameEngine->getCurrentState() == GameState::Playing && sender() == m_uiTimer) {
-        m_secondsElapsed++;
-    }
-    // 总用时规则
-    int totalM = m_secondsElapsed / 60, totalS = m_secondsElapsed % 60;
+    // 直接从 GameEngine 中拉取数据，UI 不再参与数据计算！
+    int elapsed = m_gameEngine->getTotalSecondsElapsed();
+    int totalM = elapsed / 60;
+    int totalS = elapsed % 60;
+
     int settingM = m_gameEngine->getClock()->getTotalSetting() / 60;
     int inc = m_gameEngine->getClock()->getIncrement();
     // 设置时长/棋钟
@@ -188,8 +182,8 @@ void UIController::onUpdateTimer() {
     }
 }
 
-// 精简 状态修改放到 onUpdateTimer
 void UIController::onUndoExecuted() {
+    // 状态修改放到 onUpdateTimer
     m_scene->refreshBoard();
     QTextCursor cursor = m_txtHistory->textCursor();
     cursor.movePosition(QTextCursor::End);
@@ -207,18 +201,12 @@ void UIController::onRestartClicked() {
 }
 
 void UIController::onResignClicked() {
-    // 只有游戏中才能认输
     if (m_gameEngine->getCurrentState() != GameState::Playing) return;
-    // 确认按钮
+
     QMessageBox::StandardButton reply;
     reply = QMessageBox::question(this, "认输", "确定要投降吗？", QMessageBox::Yes | QMessageBox::No);
-
-    if (reply == QMessageBox::Yes) {
-        // 判定胜负：当前回合方认输，则对方获胜
-        int result = (m_gameEngine->getCurrentPlayer() == Player::Sente) ? 2 : 1;
-        // 调用引擎结束游戏
-        m_gameEngine->finishGame(result);
-    }
+    // 由 GameEngine 统一处理胜负
+    if (reply == QMessageBox::Yes) m_gameEngine->resign();
 }
 
 void UIController::onPauseResumeClicked() {

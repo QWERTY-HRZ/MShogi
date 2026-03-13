@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <QObject>
+#include <QTimer>
 #include <memory>
 #include "Board.h"
 #include "RuleEngine.h"
@@ -27,6 +28,8 @@ public:
     bool makeMove(const Move& move);
     // 悔棋：恢复盘面和手驹状态
     void undo();
+    // 处理投降信息
+    void resign();
     // 结束游戏
     void finishGame(int result);
     // 暂停与继续
@@ -37,9 +40,9 @@ public:
     std::vector<Move> getLegalMoves(int x, int y);
     // 查询可打入位置
     std::vector<Move> getLegalDrops(PieceType type);
-    // 棋钟对外接口
-    ChessClock* getClock() const { return m_clock; }
     // Getters
+    ChessClock* getClock() const { return m_clock; }
+    int getTotalSecondsElapsed() const { return m_totalSecondsElapsed; }
     GameState getCurrentState() const;
     Player getCurrentPlayer() const;
     const Board& getBoard() const;
@@ -56,13 +59,19 @@ signals:
 private slots:
     // 响应棋钟超时
     void onClockTimeout(Player loser);
+    // 总耗时信号槽
+    void onElapsedTimerTick();
 
 private:
     GameState m_currentState;
     Board m_board;
     RuleEngine m_ruleEngine;
     MoveHistory m_history;
+    // 棋钟
     ChessClock* m_clock;
+    // 总耗时数据
+    QTimer* m_elapsedTimer;
+    int m_totalSecondsElapsed;
     // 创建棋子实例
     std::shared_ptr<Piece> createPiece(PieceType type, Player owner);
 };

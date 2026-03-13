@@ -1,8 +1,13 @@
 ﻿#include "../include/GameEngine.h"
 
 GameEngine::GameEngine(QObject *parent)
-    : QObject(parent), m_currentState(GameState::Init), m_clock(new ChessClock(this))
+    : QObject(parent), m_currentState(GameState::Init),
+      m_clock(new ChessClock(this)),
+      m_totalSecondsElapsed(0)
 {
+    m_elapsedTimer = new QTimer(this);
+    // 计算耗时
+    connect(m_elapsedTimer, &QTimer::timeout, this, &GameEngine::onElapsedTimerTick);
     // 绑定棋钟超时信号
     connect(m_clock, &ChessClock::timeout, this, &GameEngine::onClockTimeout);
 }
@@ -29,14 +34,27 @@ void GameEngine::startGame(int totalTime, int increment) {
     m_board.placePiece(4, minY + 1, createPiece(PieceType::Pawn, Player::Gote));
 
     m_currentState = GameState::Playing;
+    // 统计时间
+    m_totalSecondsElapsed = 0;
+    m_elapsedTimer->start(1000);
     // 启动棋钟
     m_clock->start(totalTime, increment, Player::Sente);
     emit stateChanged(m_currentState);
 }
 
+void GameEngine::onElapsedTimerTick() {
+    m_totalSecondsElapsed++;
+}
+
 void GameEngine::onClockTimeout(Player loser) {
     // 先手超时判后手胜
     finishGame(loser == Player::Sente ? 2 : 1);
+}
+
+void GameEngine::resign() {
+    if (m_currentState != GameState::Playing) return;
+    int result = (getCurrentPlayer() == Player::Sente) ? 2 : 1;
+    finishGame(result);
 }
 
 bool GameEngine::makeMove(const Move& move) {
@@ -153,7 +171,9 @@ void GameEngine::undo() {
 
 void GameEngine::finishGame(int result) {
     m_currentState = GameState::End;
+    // 停止计时
     m_clock->stop();
+    m_elapsedTimer->stop();
     emit stateChanged(m_currentState);
     emit gameEnded(result);
 }
@@ -162,7 +182,9 @@ void GameEngine::pauseGame() {
     // 暂停游戏
     if (m_currentState == GameState::Playing) {
         m_currentState = GameState::Paused;
+        // 停止计时
         m_clock->stop();
+        m_elapsedTimer->stop();
         emit stateChanged(m_currentState);
     }
 }
@@ -171,7 +193,9 @@ void GameEngine::resumeGame() {
     // 恢复游戏
     if (m_currentState == GameState::Paused) {
         m_currentState = GameState::Playing;
+        // 恢复计时
         m_clock->resume();
+        m_elapsedTimer->start(1000);
         emit stateChanged(m_currentState);
     }
 }

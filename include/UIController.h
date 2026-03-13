@@ -51,8 +51,10 @@ private:
     QTextEdit* m_txtHistory;
     // 暂停按钮指针
     QPushButton* m_btnPauseResume;
-    QTimer* m_uiTimer;
-    int m_secondsElapsed;
+
+    // 不在 UI 中计时
+    // QTimer* m_uiTimer;
+    // int m_secondsElapsed;
 
     // 不再记录当前玩家 而是从 gameEngine 直接获取
     // Player m_currentPlayer;
