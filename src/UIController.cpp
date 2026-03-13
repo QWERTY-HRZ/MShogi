@@ -26,8 +26,8 @@ UIController::UIController(QWidget *parent)
 
     m_uiTimer = new QTimer(this);
     connect(m_uiTimer, &QTimer::timeout, this, &UIController::onUpdateTimer);
-    // 默认开局：5+5
-    m_gameEngine->startGame(300, 5);
+    // UI 渲染完后，设置游戏时长
+    QTimer::singleShot(0, this, &UIController::promptSettingsAndStart);
 }
 
 bool UIController::handleMoveRequest(const Move& move) {
@@ -85,8 +85,25 @@ void UIController::setupUi() {
     connect(btnResign, &QPushButton::clicked, this, &UIController::onResignClicked);
     sideLayout->addWidget(btnResign);
 
+    m_btnPauseResume = new QPushButton("暂停");
+    connect(m_btnPauseResume, &QPushButton::clicked, this, UIController::onPauseResumeClicked);
+    sideLayout->addWidget(m_btnPauseResume);
+
     mainLayout->addLayout(sideLayout, 1);
     resize(1280, 960);
+}
+
+void UIController::promptSettingsAndStart() {
+    // 开始游戏 设置时间
+    bool ok;
+    int tMin = QInputDialog::getInt(this, "游戏设置", "总时长(分钟，默认为 5):", 5, 1, 120, 1, &ok);
+    if (!ok) tMin = 5;
+    int tInc = QInputDialog::getInt(this, "游戏设置", "每步奖励(秒，默认为 5):", 5, 0, 60, 1, &ok);
+    if (!ok) tInc = 5;
+
+    m_secondsElapsed = 0;
+    m_txtHistory->clear();
+    m_gameEngine->startGame(tMin * 60, tInc);
 }
 
 void UIController::resizeEvent(QResizeEvent* event) {
@@ -98,13 +115,19 @@ void UIController::onStateChanged(GameState newState) {
     m_scene->refreshBoard();
     switch (newState) {
         case GameState::Playing:
-            // 不在此处修改行棋顺序
-            // m_currentPlayer = Player::Sente;
             m_lblStatus->setText("状态: 对局中");
+            m_btnPauseResume->setText("暂停");
+            m_btnPauseResume->setEnabled(true);
             if (!m_uiTimer->isActive()) m_uiTimer->start(1000);
+            break;
+        case GameState::Paused:
+            m_lblStatus->setText("状态: 已暂停");
+            m_btnPauseResume->setText("继续");
+            m_uiTimer->stop();
             break;
         case GameState::End:
             m_lblStatus->setText("状态: 结束");
+            m_btnPauseResume->setEnabled(false);
             m_uiTimer->stop();
             break;
         default: break;
@@ -116,16 +139,6 @@ void UIController::onStateChanged(GameState newState) {
 void UIController::onMoveExecuted(const std::string& notation) {
     m_txtHistory->append(QString::fromStdString(notation));
     m_scene->refreshBoard();
-}
-
-// 精简 状态修改放到 onUpdateTimer
-void UIController::onUndoExecuted() {
-    m_scene->refreshBoard();
-    QTextCursor cursor = m_txtHistory->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    cursor.select(QTextCursor::BlockUnderCursor);
-    cursor.removeSelectedText();
-    cursor.deleteChar();
 }
 
 void UIController::onGameEnded(int result) {
@@ -175,19 +188,21 @@ void UIController::onUpdateTimer() {
     }
 }
 
+// 精简 状态修改放到 onUpdateTimer
+void UIController::onUndoExecuted() {
+    m_scene->refreshBoard();
+    QTextCursor cursor = m_txtHistory->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    cursor.select(QTextCursor::BlockUnderCursor);
+    cursor.removeSelectedText();
+    cursor.deleteChar();
+}
+
 void UIController::onRestartClicked() {
-    // 二次确认
     auto reply = QMessageBox::question(this, "重新开始", "确定重置对局吗？", QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
-        bool ok;
-        int tMin = QInputDialog::getInt(this, "设置", "总时长(分钟):", 10, 1, 120, 1, &ok);
-        if (!ok) return;
-        int tInc = QInputDialog::getInt(this, "设置", "每步奖励(秒):", 10, 0, 60, 1, &ok);
-        if (!ok) return;
-
-        m_secondsElapsed = 0;
-        m_txtHistory->clear();
-        m_gameEngine->startGame(tMin * 60, tInc); // 调用引擎重启
+        // 统一重新开始
+        promptSettingsAndStart();
     }
 }
 
@@ -203,5 +218,14 @@ void UIController::onResignClicked() {
         int result = (m_gameEngine->getCurrentPlayer() == Player::Sente) ? 2 : 1;
         // 调用引擎结束游戏
         m_gameEngine->finishGame(result);
+    }
+}
+
+void UIController::onPauseResumeClicked() {
+    GameState state = m_gameEngine->getCurrentState();
+    if (state == GameState::Playing) {
+        m_gameEngine->pauseGame();
+    } else if (state == GameState::Paused) {
+        m_gameEngine->resumeGame();
     }
 }

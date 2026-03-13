@@ -39,6 +39,9 @@ protected:
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
 
 private:
+    // 拦截函数
+    bool isInteractionBlocked(QGraphicsSceneMouseEvent *event);
+
     PieceType m_type;
     Player m_owner;
     Location m_location;

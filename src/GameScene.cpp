@@ -145,3 +145,7 @@ void GameScene::toggleHighlight(PieceItem* item) {
         m_highlights.append(rect);
     }
 }
+
+bool GameScene::isGamePlaying() const {
+    return m_engine->getCurrentState() == GameState::Playing;
+}

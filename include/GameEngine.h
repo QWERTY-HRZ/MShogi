@@ -8,8 +8,10 @@
 #include "ChessClock.h"
 
 enum class GameState {
+    // 状态：初始化、游戏中、暂停、游戏结束
     Init,
     Playing,
+    Paused,
     End
 };
 
@@ -27,6 +29,10 @@ public:
     void undo();
     // 结束游戏
     void finishGame(int result);
+    // 暂停与继续
+    void pauseGame();
+    void resumeGame();
+
     // 查询可走位置
     std::vector<Move> getLegalMoves(int x, int y);
     // 查询可打入位置
@@ -42,9 +48,9 @@ public:
 signals:
     void stateChanged(GameState newState);
     void gameEnded(int result);
-    // 移动执行成功后发送记谱字符串
+    // 移动执行成功
     void moveExecuted(const std::string& notation);
-    // 悔棋完成信号
+    // 悔棋完成
     void undoExecuted();
 
 private slots:
@@ -56,7 +62,6 @@ private:
     Board m_board;
     RuleEngine m_ruleEngine;
     MoveHistory m_history;
-    // 添加时钟
     ChessClock* m_clock;
     // 创建棋子实例
     std::shared_ptr<Piece> createPiece(PieceType type, Player owner);

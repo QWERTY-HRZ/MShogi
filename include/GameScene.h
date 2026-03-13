@@ -19,6 +19,8 @@ public:
     void setMoveRequestCallback(MoveRequestCallback cb) { m_requestCallback = cb; }
     // 切换棋子高亮状态
     void toggleHighlight(PieceItem* item);
+    // 判断游戏状态
+    bool isGamePlaying() const;
 
     static constexpr int CELL_SIZE = GameConstants::CELL_SIZE;
     static constexpr int BOARD_OFFSET_X = GameConstants::BOARD_OFFSET_X;

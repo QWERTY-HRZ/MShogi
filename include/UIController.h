@@ -21,19 +21,23 @@ private slots:
     void onMoveExecuted(const std::string& notation);
     void onGameEnded(int result);
 
-    // 统一更新时间、改变先后手
+    // 统一更新时间
     void onUpdateTimer();
-    // 悔棋槽函数
+    // 悔棋
     void onUndoExecuted();
-    // 重新开始按钮
+    // 重新开始
     void onRestartClicked();
-    // 认输按钮
+    // 认输
     void onResignClicked();
+    // 暂停/继续
+    void onPauseResumeClicked();
 
 private:
     void setupUi();
-    // 核心功能：处理来自 View 层的移动请求
+    // 处理移动请求
     bool handleMoveRequest(const Move& move);
+    //开局设置
+    void promptSettingsAndStart();
 
     GameEngine* m_gameEngine;
     GameScene* m_scene;
@@ -43,10 +47,10 @@ private:
     QLabel* m_lblGameInfo;    // 第二行: 总用时与设置
     QLabel* m_lblSenteTurn;   // 第三行: 先手时间
     QLabel* m_lblGoteTurn;    // 第四行: 后手时间
-    // [删除] QLabel* m_lblTimer;
-
 
     QTextEdit* m_txtHistory;
+    // 暂停按钮指针
+    QPushButton* m_btnPauseResume;
     QTimer* m_uiTimer;
     int m_secondsElapsed;
 

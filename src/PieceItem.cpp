@@ -15,12 +15,11 @@ PieceItem::PieceItem(PieceType type, Player owner, Location loc, int gridX, int 
 }
 
 QRectF PieceItem::boundingRect() const {
-    // 稍微缩小一点，留出边距
+    // 稍微缩小 留出边距
     return QRectF(5, 5, m_cellSize - 10, m_cellSize - 10);
 }
 
 void PieceItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
-    // 模拟绘制：实际项目中应使用 drawPixmap 加载图片
     // 简单的梯形或矩形表示
     QRectF rect = boundingRect();
     // 区分颜色 先红后黑
@@ -77,14 +76,27 @@ void PieceItem::setGridPos(int x, int y) {
     m_gridY = y;
 }
 
-void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
-    // 对禁手 阻止事件传播 直接返回
+bool PieceItem::isInteractionBlocked(QGraphicsSceneMouseEvent *event) {
     if (m_isForbidden) {
         event->accept();
-        return;
+        return true;
     }
-    // 棋子显示轨迹
+
     if (auto gameScene = dynamic_cast<GameScene*>(scene())) {
+        if (!gameScene->isGamePlaying()) {
+            event->accept();
+            return true;
+        }
+    }
+    return false;
+}
+
+void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
+    // 拦截函数
+    if (isInteractionBlocked(event)) return;
+
+    if (auto gameScene = dynamic_cast<GameScene*>(scene())) {
+        // 确认可交互
         gameScene->toggleHighlight(this);
     }
     // 记录起始位置
@@ -95,10 +107,9 @@ void PieceItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
 }
 
 void PieceItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
-    if (m_isForbidden) {
-        event->accept();
-        return;
-    }
+    // 拦截函数
+    if (isInteractionBlocked(event)) return;
+
     setCursor(Qt::OpenHandCursor);
     setZValue(1);
     // 如果棋子位移小于最小位移 视为点击 回弹
@@ -122,19 +133,13 @@ void PieceItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
 }
 
 void PieceItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
-    // 处理鼠标移动 对禁手同理
-    if (m_isForbidden) {
-        event->accept();
-        return;
-    }
+    // 拦截函数
+    if (isInteractionBlocked(event)) return;
     QGraphicsObject::mouseMoveEvent(event);
 }
 
 void PieceItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
-    // 处理鼠标双击 对禁手同理
-    if (m_isForbidden) {
-        event->accept();
-        return;
-    }
+    // 拦截函数
+    if (isInteractionBlocked(event)) return;
     QGraphicsObject::mouseDoubleClickEvent(event);
 }

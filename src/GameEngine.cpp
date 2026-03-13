@@ -158,6 +158,24 @@ void GameEngine::finishGame(int result) {
     emit gameEnded(result);
 }
 
+void GameEngine::pauseGame() {
+    // 暂停游戏
+    if (m_currentState == GameState::Playing) {
+        m_currentState = GameState::Paused;
+        m_clock->stop();
+        emit stateChanged(m_currentState);
+    }
+}
+
+void GameEngine::resumeGame() {
+    // 恢复游戏
+    if (m_currentState == GameState::Paused) {
+        m_currentState = GameState::Playing;
+        m_clock->resume();
+        emit stateChanged(m_currentState);
+    }
+}
+
 std::vector<Move> GameEngine::getLegalMoves(int x, int y) {
     // 合法移动
     std::vector<Move> moves;
