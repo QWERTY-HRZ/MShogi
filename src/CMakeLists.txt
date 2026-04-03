@@ -37,6 +37,7 @@ target_link_libraries(MShogiLib PUBLIC
 
 add_executable(MShogiApp
     main.cpp
+    ../resources.qrc
 )
 
 target_link_libraries(MShogiApp PRIVATE

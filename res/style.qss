@@ -1,0 +1,120 @@
+﻿/* =======================================
+   MShogi 全局 QSS
+======================================= */
+
+/* --- 主窗口与全局 --- */
+QMainWindow {
+    background-color: #F7F6F2; /* 温暖的米白色背景 */
+}
+
+QWidget {
+    font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    color: #333333;
+}
+
+/* --- 左侧棋盘视图 --- */
+QGraphicsView {
+    background-color: #EFEBE1; /* 稍暗的背景，衬托棋盘 */
+    border: 2px solid #D6CBB8;
+    border-radius: 8px;
+    margin: 10px;
+}
+
+/* --- 右侧面板 GroupBox --- */
+QGroupBox {
+    background-color: #FFFFFF;
+    border: 1px solid #D6CBB8;
+    border-radius: 8px;
+    margin-top: 15px; /* 为标题留出空间 */
+    padding-top: 15px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 15px;
+    padding: 0 5px;
+    color: #6B5B45; /* 木质深褐色 */
+    font-weight: bold;
+    font-size: 18px;
+}
+
+/* --- 状态信息 Labels --- */
+QLabel {
+    padding: 5px;
+    font-size: 22px;
+}
+
+QLabel#lblStatus {
+    font-size: 24px;
+    color: #8C2A2A; /* 稳重的暗红色 */
+    font-weight: bold;
+}
+
+QLabel#lblGameInfo {
+    color: #666666;
+    border-bottom: 1px solid #EEEEEE; /* 底部下划线分隔 */
+}
+
+/* 轮次标签：基础样式 */
+QLabel#lblSenteTurn {
+    color: #D32F2F; /* 先手红 */
+    border-radius: 4px;
+}
+
+QLabel#lblGoteTurn {
+    color: #212121; /* 后手黑 */
+    border-radius: 4px;
+}
+
+/* 轮次标签：激活状态 (通过 C++ property 触发) */
+QLabel#lblSenteTurn[isActive="true"] {
+    background-color: #FFEBEE;
+    font-weight: bold;
+    border: 1px solid #FFCDD2;
+}
+
+QLabel#lblGoteTurn[isActive="true"] {
+    background-color: #F5F5F5;
+    font-weight: bold;
+    border: 1px solid #E0E0E0;
+}
+
+/* --- 记谱区 QTextEdit --- */
+QTextEdit#txtHistory {
+    background-color: #FAFAFA;
+    border: 1px solid #E0E0E0;
+    border-radius: 4px;
+    font-family: "Sarasa Term SC Nerd", monospace; /* 记谱用等宽字体更好看 */
+    font-size: 20px;
+    padding: 5px;
+    selection-background-color: #D6CBB8;
+}
+
+/* --- 按钮系列 --- */
+QPushButton {
+    background-color: #FFFFFF;
+    border: 1px solid #C4B7A1;
+    border-radius: 6px;
+    color: #4A3F35;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px 15px;
+    margin: 3px;
+}
+
+QPushButton:hover {
+    background-color: #F0EAE1; /* 悬浮时呈现浅木色 */
+    border: 1px solid #A89B82;
+}
+
+QPushButton:pressed {
+    background-color: #E0D6C8;
+    border: 1px solid #8B7E66;
+}
+
+QPushButton:disabled {
+    background-color: #F5F5F5;
+    color: #BDBDBD;
+    border: 1px solid #E0E0E0;
+}

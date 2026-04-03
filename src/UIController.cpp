@@ -4,6 +4,8 @@
 #include <QGroupBox>
 #include <QMessageBox>
 #include <QInputDialog>
+// QSS
+#include <QStyle>
 
 UIController::UIController(QWidget *parent)
     : QMainWindow(parent)
@@ -45,11 +47,18 @@ void UIController::setupUi() {
     QVBoxLayout* sideLayout = new QVBoxLayout();
     QGroupBox* statusGroup = new QGroupBox("对局信息");
     QVBoxLayout* statusLayout = new QVBoxLayout(statusGroup);
-    // 重构状态栏
+    // 重构状态栏 加上 setObjectName
     m_lblStatus = new QLabel("状态: 初始化");
+    m_lblStatus->setObjectName("lblStatus");
+
     m_lblGameInfo = new QLabel("总用时: 00:00 | 棋钟: -- 分 + --");
+    m_lblGameInfo->setObjectName("lblGameInfo");
+
     m_lblSenteTurn = new QLabel("先手回合：--");
+    m_lblSenteTurn->setObjectName("lblSenteTurn");
+
     m_lblGoteTurn = new QLabel("后手回合：--");
+    m_lblGoteTurn->setObjectName("lblGoteTurn");
     // 字体大小
     QFont font = m_lblStatus->font();
     font.setPointSize(12);
@@ -66,8 +75,11 @@ void UIController::setupUi() {
     // 行棋记录
     QGroupBox* historyGroup = new QGroupBox("棋谱");
     QVBoxLayout* historyLayout = new QVBoxLayout(historyGroup);
+
     m_txtHistory = new QTextEdit();
+    m_txtHistory->setObjectName("txtHistory");
     m_txtHistory->setReadOnly(true);
+
     historyLayout->addWidget(m_txtHistory);
     sideLayout->addWidget(historyGroup);
     // 按钮
@@ -166,20 +178,23 @@ void UIController::onUpdateTimer() {
     m_lblGoteTurn->setText(QString("后手回合：剩余 %1:%2")
                            .arg(gTime / 60, 2, 10, QChar('0')).arg(gTime % 60, 2, 10, QChar('0')));
 
-    // 根据回合 加粗/改变背景色
-    QString baseSente = "color: red;";
-    QString baseGote = "color: black;";
-
+    // 使用动态属性 替代硬编码的 StyleSheet
     if (isPlaying && curP == Player::Sente) {
-        m_lblSenteTurn->setStyleSheet(baseSente + " font-weight: bold; background: #ffe0e0;");
-        m_lblGoteTurn->setStyleSheet(baseGote + " font-weight: normal; background: none;");
+        m_lblSenteTurn->setProperty("isActive", true);
+        m_lblGoteTurn->setProperty("isActive", false);
     } else if (isPlaying && curP == Player::Gote) {
-        m_lblSenteTurn->setStyleSheet(baseSente + " font-weight: normal; background: none;");
-        m_lblGoteTurn->setStyleSheet(baseGote + " font-weight: bold; background: #e0e0e0;");
+        m_lblSenteTurn->setProperty("isActive", false);
+        m_lblGoteTurn->setProperty("isActive", true);
     } else {
-        m_lblSenteTurn->setStyleSheet(baseSente);
-        m_lblGoteTurn->setStyleSheet(baseGote);
+        m_lblSenteTurn->setProperty("isActive", false);
+        m_lblGoteTurn->setProperty("isActive", false);
     }
+
+    // 强制刷新样式以应用 QSS
+    m_lblSenteTurn->style()->unpolish(m_lblSenteTurn);
+    m_lblSenteTurn->style()->polish(m_lblSenteTurn);
+    m_lblGoteTurn->style()->unpolish(m_lblGoteTurn);
+    m_lblGoteTurn->style()->polish(m_lblGoteTurn);
 }
 
 void UIController::onUndoExecuted() {
