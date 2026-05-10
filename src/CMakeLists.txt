@@ -22,9 +22,12 @@ set(MSHOGI_LIB_HEADERS
     ../include/ChessClock.h
 )
 
+set(MSHOGI_RESOURCES ../resources.qrc)
+
 add_library(MShogiLib STATIC
     ${MSHOGI_LIB_SOURCES}
     ${MSHOGI_LIB_HEADERS}
+    ${MSHOGI_RESOURCES}
 )
 
 target_include_directories(MShogiLib PUBLIC ../include)
@@ -33,11 +36,12 @@ target_link_libraries(MShogiLib PUBLIC
     Qt5::Core
     Qt5::Widgets
     Qt5::Gui
+    Qt5::Multimedia
 )
 
 add_executable(MShogiApp
     main.cpp
-    ../resources.qrc
+    ${MSHOGI_RESOURCES}
 )
 
 target_link_libraries(MShogiApp PRIVATE
@@ -45,4 +49,5 @@ target_link_libraries(MShogiApp PRIVATE
     Qt5::Core
     Qt5::Widgets
     Qt5::Gui
+    Qt5::Multimedia
 )

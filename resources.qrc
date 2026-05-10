@@ -1,5 +1,15 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
     <file>res/style.qss</file>
+    <file>res/bg_board.png</file>
+    <file>res/icons/btn_pause.svg</file>
+    <file>res/icons/btn_play.svg</file>
+    <file>res/icons/btn_resign.svg</file>
+    <file>res/icons/btn_restart.svg</file>
+    <file>res/icons/btn_undo.svg</file>
+    <file>res/sounds/capture.wav</file>
+    <file>res/sounds/fail.wav</file>
+    <file>res/sounds/open.wav</file>
+    <file>res/sounds/place.wav</file>
 </qresource>
 </RCC>

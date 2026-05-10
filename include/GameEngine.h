@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QTimer>
 #include <memory>
+// 音效
+#include <QMediaPlayer>
 #include "Board.h"
 #include "RuleEngine.h"
 #include "MoveHistory.h"
@@ -72,6 +74,11 @@ private:
     // 总耗时数据
     QTimer* m_elapsedTimer;
     int m_totalSecondsElapsed;
+    // 音效指针
+    QMediaPlayer* m_sndPlace;
+    QMediaPlayer* m_sndCapture;
+    QMediaPlayer* m_sndOpen;
+    QMediaPlayer* m_sndEnd;
     // 创建棋子实例
     std::shared_ptr<Piece> createPiece(PieceType type, Player owner);
 };

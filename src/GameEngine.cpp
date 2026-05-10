@@ -10,6 +10,15 @@ GameEngine::GameEngine(QObject *parent)
     connect(m_elapsedTimer, &QTimer::timeout, this, &GameEngine::onElapsedTimerTick);
     // 绑定棋钟超时信号
     connect(m_clock, &ChessClock::timeout, this, &GameEngine::onClockTimeout);
+    auto initPlayer = [this](QMediaPlayer*& player, const QString& path) {
+        player = new QMediaPlayer(this);
+        player->setMedia(QUrl(path));
+        player->setVolume(100);
+    };
+    initPlayer(m_sndPlace, "qrc:/res/sounds/place.wav");
+    initPlayer(m_sndCapture, "qrc:/res/sounds/capture.wav");
+    initPlayer(m_sndOpen, "qrc:/res/sounds/open.wav");
+    initPlayer(m_sndEnd, "qrc:/res/sounds/fail.wav");
 }
 
 void GameEngine::startGame(int totalTime, int increment) {
@@ -37,6 +46,9 @@ void GameEngine::startGame(int totalTime, int increment) {
     // 统计时间
     m_totalSecondsElapsed = 0;
     m_elapsedTimer->start(1000);
+    // 启动音效
+    m_sndOpen->setPosition(0);
+    m_sndOpen->play();
     // 启动棋钟
     m_clock->start(totalTime, increment, Player::Sente);
     emit stateChanged(m_currentState);
@@ -66,6 +78,7 @@ bool GameEngine::makeMove(const Move& move) {
     std::optional<PieceType> capturedOriginalType = std::nullopt;
     bool isPromoted = false;
     bool shouldPromote = false;
+    bool isCapture = false;
 
     // 执行逻辑
     if (move.isDrop) {
@@ -79,6 +92,7 @@ bool GameEngine::makeMove(const Move& move) {
         // 处理吃子
         auto target = m_board.getPiece(move.toX, move.toY);
         if (target) {
+            isCapture = true;
             capturedOriginalType = target->getType();
             // 侯降变回兵
             PieceType handType = (capturedOriginalType.value() == PieceType::Hou)
@@ -96,6 +110,14 @@ bool GameEngine::makeMove(const Move& move) {
             m_board.placePiece(move.toX, move.toY, createPiece(PieceType::Hou, move.player));
             isPromoted = true;
         }
+    }
+    // 播放音效
+    if (isCapture) {
+        m_sndCapture->setPosition(0); // 进度条拉回 0 毫秒
+        m_sndCapture->play();
+    } else {
+        m_sndPlace->setPosition(0);
+        m_sndPlace->play();
     }
 
     // 手驹回合数 +1
@@ -174,6 +196,9 @@ void GameEngine::finishGame(int result) {
     // 停止计时
     m_clock->stop();
     m_elapsedTimer->stop();
+    // 结束音效
+    m_sndEnd->setPosition(0);
+    m_sndEnd->play();
     emit stateChanged(m_currentState);
     emit gameEnded(result);
 }

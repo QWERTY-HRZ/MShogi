@@ -83,20 +83,24 @@ void UIController::setupUi() {
     historyLayout->addWidget(m_txtHistory);
     sideLayout->addWidget(historyGroup);
     // 按钮
-    QPushButton* btnUndo = new QPushButton("悔棋");
+    QPushButton* btnUndo = new QPushButton(" 悔棋");
+    btnUndo->setIcon(QIcon(":res/icons/btn_undo.svg"));
     connect(btnUndo, &QPushButton::clicked, m_gameEngine, &GameEngine::undo);
     sideLayout->addWidget(btnUndo);
 
-    QPushButton* btnRestart = new QPushButton("重新开始");
+    QPushButton* btnRestart = new QPushButton(" 重开");
+    btnRestart->setIcon(QIcon(":res/icons/btn_restart.svg"));
     connect(btnRestart, &QPushButton::clicked, this, &UIController::onRestartClicked);
     sideLayout->addWidget(btnRestart);
 
-    QPushButton* btnResign = new QPushButton("认输");
+    QPushButton* btnResign = new QPushButton(" 认输");
+    btnResign->setIcon(QIcon(":res/icons/btn_resign.svg"));
     connect(btnResign, &QPushButton::clicked, this, &UIController::onResignClicked);
     sideLayout->addWidget(btnResign);
 
-    m_btnPauseResume = new QPushButton("暂停");
-    connect(m_btnPauseResume, &QPushButton::clicked, this, UIController::onPauseResumeClicked);
+    m_btnPauseResume = new QPushButton(" 暂停");
+    m_btnPauseResume->setIcon(QIcon(":res/icons/btn_pause.svg"));
+    connect(m_btnPauseResume, &QPushButton::clicked, this, &UIController::onPauseResumeClicked);
     sideLayout->addWidget(m_btnPauseResume);
 
     mainLayout->addLayout(sideLayout, 1);
@@ -126,12 +130,14 @@ void UIController::onStateChanged(GameState newState) {
     switch (newState) {
         case GameState::Playing:
             m_lblStatus->setText("状态: 对局中");
-            m_btnPauseResume->setText("暂停");
+            m_btnPauseResume->setText(" 暂停");
+            m_btnPauseResume->setIcon(QIcon(":/res/icons/btn_pause.svg"));
             m_btnPauseResume->setEnabled(true);
             break;
         case GameState::Paused:
             m_lblStatus->setText("状态: 已暂停");
-            m_btnPauseResume->setText("继续");
+            m_btnPauseResume->setIcon(QIcon(":/res/icons/btn_play.svg"));
+            m_btnPauseResume->setText(" 继续");
             break;
         case GameState::End:
             m_lblStatus->setText("状态: 结束");

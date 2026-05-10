@@ -1,9 +1,17 @@
 ﻿#include "../include/GameScene.h"
 #include <QGraphicsLineItem>
+#include <QBrush>
+#include <QPixmap>
 
 GameScene::GameScene(GameEngine* engine, QObject* parent)
     : QGraphicsScene(parent), m_engine(engine)
 {
+    QPixmap bgPixmap(":res/bg_board.png");
+    if (!bgPixmap.isNull()) {
+        setBackgroundBrush(QBrush(bgPixmap));
+    } else {
+        setBackgroundBrush(QBrush(QColor(239,235,225))); // 备用纯色
+    }
     // 500, 800
     int w = BOARD_OFFSET_X * 2 + GameConstants::COLS * CELL_SIZE;
     int h = BOARD_OFFSET_Y * 2 + GameConstants::ROWS * CELL_SIZE;
