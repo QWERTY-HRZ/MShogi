@@ -15,6 +15,8 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    // 绘图事件
+    void paintEvent(QPaintEvent* event) override;
 
 private slots:
     void onStateChanged(GameState newState);
@@ -51,6 +53,8 @@ private:
     QTextEdit* m_txtHistory;
     // 暂停按钮指针
     QPushButton* m_btnPauseResume;
+    // 背景图片
+    QPixmap m_bgPixmap;
 
     // 不在 UI 中计时
     // QTimer* m_uiTimer;

@@ -6,12 +6,6 @@
 GameScene::GameScene(GameEngine* engine, QObject* parent)
     : QGraphicsScene(parent), m_engine(engine)
 {
-    QPixmap bgPixmap(":res/bg_board.png");
-    if (!bgPixmap.isNull()) {
-        setBackgroundBrush(QBrush(bgPixmap));
-    } else {
-        setBackgroundBrush(QBrush(QColor(239,235,225))); // 备用纯色
-    }
     // 500, 800
     int w = BOARD_OFFSET_X * 2 + GameConstants::COLS * CELL_SIZE;
     int h = BOARD_OFFSET_Y * 2 + GameConstants::ROWS * CELL_SIZE;
@@ -29,7 +23,7 @@ void GameScene::refreshBoard() {
 }
 
 void GameScene::drawGrid() {
-    QPen pen(Qt::black);
+    QPen pen(Qt::white, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
     for (int i = 0; i <= GameConstants::COLS; ++i)
         addLine(BOARD_OFFSET_X + i * CELL_SIZE, BOARD_OFFSET_Y,
                  BOARD_OFFSET_X + i * CELL_SIZE, BOARD_OFFSET_Y + GameConstants::ROWS * CELL_SIZE, pen);

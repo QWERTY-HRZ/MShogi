@@ -1,6 +1,7 @@
 ﻿#include "../include/UIController.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QMessageBox>
 #include <QInputDialog>
@@ -10,6 +11,7 @@
 UIController::UIController(QWidget *parent)
     : QMainWindow(parent)
 {
+    m_bgPixmap.load(":/res/bg_board.png");
     m_gameEngine = new GameEngine(this);
     m_scene = new GameScene(m_gameEngine, this);
 
@@ -36,6 +38,8 @@ bool UIController::handleMoveRequest(const Move& move) {
 
 void UIController::setupUi() {
     QWidget* centralWidget = new QWidget(this);
+    // 便于 QSS 识别
+    centralWidget->setObjectName("centralWidget");
     setCentralWidget(centralWidget);
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
 
@@ -82,27 +86,40 @@ void UIController::setupUi() {
 
     historyLayout->addWidget(m_txtHistory);
     sideLayout->addWidget(historyGroup);
+    // 修改按钮布局
+    QGridLayout* btnLayout = new QGridLayout();
+    btnLayout->setSpacing(10);
+    // 顶部留出一点边距，与记谱区隔开
+    btnLayout->setContentsMargins(0, 10, 0, 0);
+    // 定义统一的图标大小
+    QSize iconSize(24, 24);
+
     // 按钮
     QPushButton* btnUndo = new QPushButton(" 悔棋");
-    btnUndo->setIcon(QIcon(":res/icons/btn_undo.svg"));
+    btnUndo->setIcon(QIcon(":/res/icons/btn_undo.svg"));
+    btnUndo->setIconSize(iconSize);
     connect(btnUndo, &QPushButton::clicked, m_gameEngine, &GameEngine::undo);
-    sideLayout->addWidget(btnUndo);
+    btnLayout->addWidget(btnUndo, 0, 0); // 第 0 行, 第 0 列，后同
 
     QPushButton* btnRestart = new QPushButton(" 重开");
-    btnRestart->setIcon(QIcon(":res/icons/btn_restart.svg"));
+    btnRestart->setIcon(QIcon(":/res/icons/btn_restart.svg"));
+    btnRestart->setIconSize(iconSize);
     connect(btnRestart, &QPushButton::clicked, this, &UIController::onRestartClicked);
-    sideLayout->addWidget(btnRestart);
+    btnLayout->addWidget(btnRestart, 0, 1);
 
     QPushButton* btnResign = new QPushButton(" 认输");
-    btnResign->setIcon(QIcon(":res/icons/btn_resign.svg"));
+    btnResign->setIcon(QIcon(":/res/icons/btn_resign.svg"));
+    btnResign->setIconSize(iconSize);
     connect(btnResign, &QPushButton::clicked, this, &UIController::onResignClicked);
-    sideLayout->addWidget(btnResign);
+    btnLayout->addWidget(btnResign, 1, 0);
 
     m_btnPauseResume = new QPushButton(" 暂停");
-    m_btnPauseResume->setIcon(QIcon(":res/icons/btn_pause.svg"));
+    m_btnPauseResume->setIcon(QIcon(":/res/icons/btn_pause.svg"));
+    m_btnPauseResume->setIconSize(iconSize);
     connect(m_btnPauseResume, &QPushButton::clicked, this, &UIController::onPauseResumeClicked);
-    sideLayout->addWidget(m_btnPauseResume);
-
+    btnLayout->addWidget(m_btnPauseResume, 1, 1);
+    // 添加网格布局
+    sideLayout->addLayout(btnLayout);
     mainLayout->addLayout(sideLayout, 1);
     resize(1280, 960);
 }
@@ -121,7 +138,39 @@ void UIController::promptSettingsAndStart() {
 
 void UIController::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
-    if (m_view && m_scene) m_view->fitInView(m_scene->sceneRect(), Qt::KeepAspectRatio);
+    // 保持棋盘比例
+    if (m_view && m_scene) {
+        m_view->fitInView(m_scene->sceneRect(), Qt::KeepAspectRatio);
+    }
+
+    // 计算字体缩放因子 (以初始 1280 为基准)
+    qreal scale = (qreal)this->width() / 1280.0;
+    if (scale < 0.6) scale = 0.6; // 设置下限，防止窗口过小时文字消失
+
+    // 3. 动态更新所有文字控件的像素大小
+    auto setScaledFont = [&](QWidget* w, int baseSize, bool bold = false) {
+        if (!w) return;
+        QFont f = w->font();
+        f.setPixelSize(qRound(baseSize * scale));
+        f.setBold(bold);
+        w->setFont(f);
+    };
+
+    // 设置初始字体大小
+    setScaledFont(m_lblStatus, 22, true);
+    setScaledFont(m_lblGameInfo, 22);
+    setScaledFont(m_lblSenteTurn, 22);
+    setScaledFont(m_lblGoteTurn, 22);
+
+    // 记谱区域
+    setScaledFont(m_txtHistory, 22, true);
+
+    // 按钮
+    QList<QPushButton*> btns = this->findChildren<QPushButton*>();
+    for (auto btn : btns) {
+        setScaledFont(btn, 18, true);
+    }
+    // 不处理 QGroupBox
 }
 
 void UIController::onStateChanged(GameState newState) {
@@ -237,4 +286,13 @@ void UIController::onPauseResumeClicked() {
     } else if (state == GameState::Paused) {
         m_gameEngine->resumeGame();
     }
+}
+
+void UIController::paintEvent(QPaintEvent *event) {
+    QPainter painter(this);
+    if (!m_bgPixmap.isNull()) {
+        // drawPixmap 会自动将图片平滑拉伸铺满 rect() (即整个窗口)
+        painter.drawPixmap(rect(), m_bgPixmap);
+    }
+    QMainWindow::paintEvent(event);
 }

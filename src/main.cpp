@@ -9,6 +9,8 @@ int main(int argc, char *argv[]) {
     QFile styleFile(":/res/style.qss");
     if(styleFile.open(QFile::ReadOnly | QFile::Text)) {
         QTextStream ts(&styleFile);
+        // 指定QSS解析格式
+        ts.setCodec("UTF-8");
         app.setStyleSheet(ts.readAll());
         styleFile.close();
     } else {
