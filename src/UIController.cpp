@@ -280,7 +280,12 @@ void UIController::onUndoExecuted() {
 }
 
 void UIController::onRestartClicked() {
-    auto reply = QMessageBox::question(this, "重新开始", "确定重置对局吗？", QMessageBox::Yes | QMessageBox::No);
+    Player curP = m_gameEngine->getCurrentPlayer();
+    // 显示当前先后手
+    QString playerStr = (curP == Player::Sente) ? "先手" : "后手";
+    QString msg = QString("当前是【%1】回合。\n\n确定要重置对局吗？").arg(playerStr);
+
+    auto reply = QMessageBox::question(this, "重新开始", msg, QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
         // 统一重新开始
         promptSettingsAndStart();
@@ -289,9 +294,13 @@ void UIController::onRestartClicked() {
 
 void UIController::onResignClicked() {
     if (m_gameEngine->getCurrentState() != GameState::Playing) return;
+    // 显示当前先后手
+    Player curP = m_gameEngine->getCurrentPlayer();
+    QString playerStr = (curP == Player::Sente) ? "先手" : "后手";
+    QString msg = QString("当前是【%1】回合。\n\n确定要投降吗？").arg(playerStr);
 
     QMessageBox::StandardButton reply;
-    reply = QMessageBox::question(this, "认输", "确定要投降吗？", QMessageBox::Yes | QMessageBox::No);
+    reply = QMessageBox::question(this, "投降", msg, QMessageBox::Yes | QMessageBox::No);
     // 由 GameEngine 统一处理胜负
     if (reply == QMessageBox::Yes) m_gameEngine->resign();
 }
