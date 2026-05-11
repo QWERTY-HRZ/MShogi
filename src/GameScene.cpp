@@ -34,6 +34,10 @@ void GameScene::drawGrid() {
 
 void GameScene::drawPieces() {
     const auto& board = m_engine->getBoard();
+    // 当前玩家
+    Player curP = m_engine->getCurrentPlayer();
+    bool isPlaying = isGamePlaying();
+
     for (int x = 0; x < Board::COLS; ++x) {
         for (int y = 0; y < Board::ROWS; ++y) {
             auto p = board.getPiece(x, y);
@@ -41,6 +45,10 @@ void GameScene::drawPieces() {
                 // 修正：直接使用 y，不反转
                 auto item = new PieceItem(p->getType(), p->getOwner(), PieceItem::OnBoard, x, y, CELL_SIZE);
                 item->setPos(gridToScene(x, y));
+                // 不允许拖动非当前回合棋子
+                if (p->getOwner() != curP || !isPlaying) {
+                    item->setFlag(QGraphicsItem::ItemIsMovable, false);
+                }
                 addItem(item);
             }
         }
@@ -93,6 +101,10 @@ bool GameScene::sceneToGrid(QPointF pos, int &x, int &y) const {
 }
 
 bool GameScene::handlePieceDrop(PieceItem* item, QPointF dropPos) {
+    // 不允许移动非当前回合玩家的棋子
+    if (item->getOwner() != m_engine->getCurrentPlayer() || !isGamePlaying()) {
+        return false;
+    }
     int toX, toY;
     if (!sceneToGrid(dropPos, toX, toY)) return false; // 坐标无效
 
