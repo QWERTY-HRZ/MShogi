@@ -42,11 +42,15 @@ void UIController::setupUi() {
     centralWidget->setObjectName("centralWidget");
     setCentralWidget(centralWidget);
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
-
+    // 整体窗口
     m_view = new QGraphicsView(m_scene);
     m_view->setRenderHint(QPainter::Antialiasing);
     m_view->setDragMode(QGraphicsView::NoDrag);
-    mainLayout->addWidget(m_view, 2);
+    m_view->setMinimumSize(100, 100);
+    // 去掉滚动条
+    m_view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    mainLayout->addWidget(m_view, 3);
 
     QVBoxLayout* sideLayout = new QVBoxLayout();
     QGroupBox* statusGroup = new QGroupBox("对局信息");
@@ -63,13 +67,6 @@ void UIController::setupUi() {
 
     m_lblGoteTurn = new QLabel("后手回合：--");
     m_lblGoteTurn->setObjectName("lblGoteTurn");
-    // 字体大小
-    QFont font = m_lblStatus->font();
-    font.setPointSize(12);
-    m_lblStatus->setFont(font);
-    m_lblGameInfo->setFont(font);
-    m_lblSenteTurn->setFont(font);
-    m_lblGoteTurn->setFont(font);
     // 调整边框
     statusLayout->addWidget(m_lblStatus);
     statusLayout->addWidget(m_lblGameInfo);
@@ -83,10 +80,12 @@ void UIController::setupUi() {
     m_txtHistory = new QTextEdit();
     m_txtHistory->setObjectName("txtHistory");
     m_txtHistory->setReadOnly(true);
-
+    m_txtHistory->setMinimumSize(100, 100);
     historyLayout->addWidget(m_txtHistory);
-    sideLayout->addWidget(historyGroup);
-    // 修改按钮布局
+    // 添加参数 1，让棋谱区主动承担高度伸缩，以显示底部按钮
+    sideLayout->addWidget(historyGroup, 1);
+
+    // 按钮布局
     QGridLayout* btnLayout = new QGridLayout();
     btnLayout->setSpacing(10);
     // 顶部留出一点边距，与记谱区隔开
@@ -95,33 +94,35 @@ void UIController::setupUi() {
     QSize iconSize(24, 24);
 
     // 按钮
-    QPushButton* btnUndo = new QPushButton(" 悔棋");
-    btnUndo->setIcon(QIcon(":/res/icons/btn_undo.svg"));
-    btnUndo->setIconSize(iconSize);
-    connect(btnUndo, &QPushButton::clicked, m_gameEngine, &GameEngine::undo);
-    btnLayout->addWidget(btnUndo, 0, 0); // 第 0 行, 第 0 列，后同
+    m_btnUndo = new QPushButton(" 悔棋");
+    m_btnUndo->setIcon(QIcon(":/res/icons/btn_undo.svg"));
+    m_btnUndo->setIconSize(iconSize);
+    connect(m_btnUndo, &QPushButton::clicked, m_gameEngine, &GameEngine::undo);
+    btnLayout->addWidget(m_btnUndo, 0, 0);
 
-    QPushButton* btnRestart = new QPushButton(" 重开");
-    btnRestart->setIcon(QIcon(":/res/icons/btn_restart.svg"));
-    btnRestart->setIconSize(iconSize);
-    connect(btnRestart, &QPushButton::clicked, this, &UIController::onRestartClicked);
-    btnLayout->addWidget(btnRestart, 0, 1);
+    m_btnRestart = new QPushButton(" 重开");
+    m_btnRestart->setIcon(QIcon(":/res/icons/btn_restart.svg"));
+    m_btnRestart->setIconSize(iconSize);
+    connect(m_btnRestart, &QPushButton::clicked, this, &UIController::onRestartClicked);
+    btnLayout->addWidget(m_btnRestart, 0, 1);
 
-    QPushButton* btnResign = new QPushButton(" 认输");
-    btnResign->setIcon(QIcon(":/res/icons/btn_resign.svg"));
-    btnResign->setIconSize(iconSize);
-    connect(btnResign, &QPushButton::clicked, this, &UIController::onResignClicked);
-    btnLayout->addWidget(btnResign, 1, 0);
+    m_btnResign = new QPushButton(" 认输");
+    m_btnResign->setIcon(QIcon(":/res/icons/btn_resign.svg"));
+    m_btnResign->setIconSize(iconSize);
+    connect(m_btnResign, &QPushButton::clicked, this, &UIController::onResignClicked);
+    btnLayout->addWidget(m_btnResign, 1, 0);
 
     m_btnPauseResume = new QPushButton(" 暂停");
     m_btnPauseResume->setIcon(QIcon(":/res/icons/btn_pause.svg"));
     m_btnPauseResume->setIconSize(iconSize);
     connect(m_btnPauseResume, &QPushButton::clicked, this, &UIController::onPauseResumeClicked);
     btnLayout->addWidget(m_btnPauseResume, 1, 1);
-    // 添加网格布局
+
     sideLayout->addLayout(btnLayout);
     mainLayout->addLayout(sideLayout, 1);
-    resize(1280, 960);
+
+    this->setMinimumSize(800, 600);
+    resize(GameConstants::INITIAL_WIDTH, GameConstants::INITIAL_HEIGHT);
 }
 
 void UIController::promptSettingsAndStart() {
@@ -138,16 +139,16 @@ void UIController::promptSettingsAndStart() {
 
 void UIController::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
-    // 保持棋盘比例
+    // 让棋盘内容自适应 View 的大小
     if (m_view && m_scene) {
         m_view->fitInView(m_scene->sceneRect(), Qt::KeepAspectRatio);
     }
+    // 重新启用动态计算字体缩放因子 (以初始宽高为基准)
+    qreal scaleW = (qreal)this->width() / GameConstants::INITIAL_WIDTH;
+    qreal scaleH = (qreal)this->height() / GameConstants::INITIAL_HEIGHT;
+    qreal scale = qBound(0.6, qMin(scaleW, scaleH), 3.0);
 
-    // 计算字体缩放因子 (以初始 1280 为基准)
-    qreal scale = (qreal)this->width() / 1280.0;
-    if (scale < 0.6) scale = 0.6; // 设置下限，防止窗口过小时文字消失
-
-    // 3. 动态更新所有文字控件的像素大小
+    // 动态更新所有文字控件的像素大小
     auto setScaledFont = [&](QWidget* w, int baseSize, bool bold = false) {
         if (!w) return;
         QFont f = w->font();
@@ -156,21 +157,23 @@ void UIController::resizeEvent(QResizeEvent* event) {
         w->setFont(f);
     };
 
-    // 设置初始字体大小
+    // 状态标签
     setScaledFont(m_lblStatus, 22, true);
-    setScaledFont(m_lblGameInfo, 22);
-    setScaledFont(m_lblSenteTurn, 22);
-    setScaledFont(m_lblGoteTurn, 22);
+    setScaledFont(m_lblGameInfo, 20);
+    setScaledFont(m_lblSenteTurn, 20);
+    setScaledFont(m_lblGoteTurn, 20);
+    setScaledFont(m_txtHistory, 20, true);
+    // 按钮变量名更新
+    setScaledFont(m_btnUndo, 18, true);
+    setScaledFont(m_btnRestart, 18, true);
+    setScaledFont(m_btnResign, 18, true);
+    setScaledFont(m_btnPauseResume, 18, true);
 
-    // 记谱区域
-    setScaledFont(m_txtHistory, 22, true);
-
-    // 按钮
-    QList<QPushButton*> btns = this->findChildren<QPushButton*>();
-    for (auto btn : btns) {
-        setScaledFont(btn, 18, true);
+    // 直接使用现成的 lambda 表达式，安全地修改 QGroupBox 本身
+    QList<QGroupBox*> groups = this->findChildren<QGroupBox*>();
+    for (auto group : groups) {
+        setScaledFont(group, 20, true);
     }
-    // 不处理 QGroupBox
 }
 
 void UIController::onStateChanged(GameState newState) {
@@ -191,6 +194,7 @@ void UIController::onStateChanged(GameState newState) {
         case GameState::End:
             m_lblStatus->setText("状态: 结束");
             m_btnPauseResume->setEnabled(false);
+            m_btnUndo->setEnabled(false);
             break;
         default: break;
     }
@@ -245,11 +249,24 @@ void UIController::onUpdateTimer() {
         m_lblGoteTurn->setProperty("isActive", false);
     }
 
-    // 强制刷新样式以应用 QSS
+    // 重新渲染
     m_lblSenteTurn->style()->unpolish(m_lblSenteTurn);
     m_lblSenteTurn->style()->polish(m_lblSenteTurn);
     m_lblGoteTurn->style()->unpolish(m_lblGoteTurn);
     m_lblGoteTurn->style()->polish(m_lblGoteTurn);
+
+    // 在此处重新抓取比例并缩放
+    qreal scaleW = (qreal)this->width() / GameConstants::INITIAL_WIDTH;
+    qreal scaleH = (qreal)this->height() / GameConstants::INITIAL_HEIGHT;
+    qreal scale = qBound(0.6, qMin(scaleW, scaleH), 3.0);
+
+    QFont fontS = m_lblSenteTurn->font();
+    fontS.setPixelSize(qRound(20 * scale));
+    m_lblSenteTurn->setFont(fontS);
+
+    QFont fontG = m_lblGoteTurn->font();
+    fontG.setPixelSize(qRound(20 * scale));
+    m_lblGoteTurn->setFont(fontG);
 }
 
 void UIController::onUndoExecuted() {

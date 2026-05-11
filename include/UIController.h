@@ -51,8 +51,11 @@ private:
     QLabel* m_lblGoteTurn;    // 第四行: 后手时间
 
     QTextEdit* m_txtHistory;
-    // 暂停按钮指针
+    // 按钮指针
     QPushButton* m_btnPauseResume;
+    QPushButton* m_btnUndo;
+    QPushButton* m_btnRestart;
+    QPushButton* m_btnResign;
     // 背景图片
     QPixmap m_bgPixmap;
 

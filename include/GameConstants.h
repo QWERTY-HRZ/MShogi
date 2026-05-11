@@ -20,4 +20,8 @@ namespace GameConstants {
 
     // 拖拽的X/Y轴最小位移 小于此值视为点击
     static constexpr double MIN_DRAG_DISTANCE = 15.0;
+
+    // 棋盘初始长宽
+    const int INITIAL_WIDTH = 1280;
+    const int INITIAL_HEIGHT = 960;
 }

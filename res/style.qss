@@ -17,8 +17,8 @@ QGroupBox {
     background-color: rgba(255, 255, 255, 0.80);
     border: 1px solid rgba(214, 203, 184, 0.5);
     border-radius: 8px;
-    /* 调大 margin */
-    margin-top: 30px;
+    /* margin */
+    margin-top: 25px;
     padding-top: 15px;
 }
 
@@ -30,17 +30,17 @@ QGroupBox::title {
     padding: 0 5px;
     color: white;
     font-weight: bold;
-    font-size: 24px;
+/*    字体大小在UI中指定*/
 }
 
 QLabel {
     padding: 5px;
-/*    font-size: 22px;*/
+/*    font-size: 18pt;*/
     background: transparent;
 }
 
 QLabel#lblStatus {
-/*    font-size: 24px;*/
+/*    font-size: 18pt;*/
     color: #8C2A2A;
     font-weight: bold;
 }
@@ -71,7 +71,7 @@ QTextEdit#txtHistory {
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 4px;
     font-family: "Sarasa Term SC Nerd";
-/*    font-size: 22px;*/
+/*    font-size: 20pt;*/
     font-weight: bold;
     padding: 5px;
     selection-background-color: #D6CBB8;
@@ -83,7 +83,7 @@ QPushButton {
     border: 1px solid rgba(214, 203, 184, 0.4);
     border-radius: 8px;            /* 为悬浮高亮准备圆角 */
     color: #4A3F35;                /* 文字颜色 */
-/*    font-size: 18px;*/
+/*    font-size: 16pt;*/
     font-weight: bold;
     padding: 12px 10px;            /* 增加内边距，扩大点击和高亮的范围 */
 }
