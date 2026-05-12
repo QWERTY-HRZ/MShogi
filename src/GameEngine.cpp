@@ -1,4 +1,5 @@
 ﻿#include "../include/GameEngine.h"
+#include <QAudioOutput> // Qt6 引入独立的音频输出类
 
 GameEngine::GameEngine(QObject *parent)
     : QObject(parent), m_currentState(GameState::Init),
@@ -12,8 +13,13 @@ GameEngine::GameEngine(QObject *parent)
     connect(m_clock, &ChessClock::timeout, this, &GameEngine::onClockTimeout);
     auto initPlayer = [this](QMediaPlayer*& player, const QString& path) {
         player = new QMediaPlayer(this);
-        player->setMedia(QUrl(path));
-        player->setVolume(100);
+        // 音频输出模块独立绑定到 player，并由其管理内存
+        QAudioOutput* audioOutput = new QAudioOutput(player);
+        player->setAudioOutput(audioOutput);
+        // setMedia 改为 setSource
+        player->setSource(QUrl(path));
+        // 音量变更为 0.0 ~ 1.0 的浮点数
+        audioOutput->setVolume(1.0f);
     };
     initPlayer(m_sndPlace, "qrc:/res/sounds/place.wav");
     initPlayer(m_sndCapture, "qrc:/res/sounds/capture.wav");

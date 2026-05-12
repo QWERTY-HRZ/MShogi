@@ -33,10 +33,10 @@ add_library(MShogiLib STATIC
 target_include_directories(MShogiLib PUBLIC ../include)
 
 target_link_libraries(MShogiLib PUBLIC
-    Qt5::Core
-    Qt5::Widgets
-    Qt5::Gui
-    Qt5::Multimedia
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Gui
+    Qt6::Multimedia
 )
 
 add_executable(MShogiApp
@@ -46,8 +46,8 @@ add_executable(MShogiApp
 
 target_link_libraries(MShogiApp PRIVATE
     MShogiLib
-    Qt5::Core
-    Qt5::Widgets
-    Qt5::Gui
-    Qt5::Multimedia
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Gui
+    Qt6::Multimedia
 )

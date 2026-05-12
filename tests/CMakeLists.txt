@@ -1,4 +1,4 @@
-﻿find_package(Qt5 COMPONENTS Core Widgets Gui REQUIRED)
+﻿find_package(Qt6 COMPONENTS Core Widgets Gui REQUIRED)
 
 add_executable(MShogiTests
     tst_ruleengine.cpp
@@ -10,7 +10,7 @@ target_link_libraries(MShogiTests PRIVATE
     MShogiLib
     gtest
     gtest_main
-    Qt5::Core
+    Qt6::Core
 )
 include(GoogleTest)
 gtest_discover_tests(MShogiTests)
@@ -22,9 +22,9 @@ add_executable(UITests
 target_link_libraries(UITests PRIVATE
     MShogiLib
     gtest
-    Qt5::Core
-    Qt5::Widgets
-    Qt5::Gui
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Gui
 )
 # 注册为普通测试
 gtest_discover_tests(UITests)
