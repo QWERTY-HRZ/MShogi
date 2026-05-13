@@ -3,7 +3,7 @@
     UIController.cpp
     Board.cpp
     RuleEngine.cpp
-    Movehistory.cpp
+    MoveHistory.cpp
     PieceItem.cpp
     GameScene.cpp
     ChessClock.cpp
@@ -15,7 +15,7 @@ set(MSHOGI_LIB_HEADERS
     ../include/Piece.h
     ../include/Board.h
     ../include/RuleEngine.h
-    ../include/Movehistory.h
+    ../include/MoveHistory.h
     ../include/PieceItem.h
     ../include/GameScene.h
     ../include/GameConstants.h
