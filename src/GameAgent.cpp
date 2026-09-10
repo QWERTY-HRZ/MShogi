@@ -1,6 +1,9 @@
 #include "GameAgent.h"
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <limits>
+#include <random>
 
 namespace {
 int winnerFor(Player player) {
@@ -16,12 +19,19 @@ AlphaBetaAgent::AlphaBetaAgent(int maxDepth, EvaluationWeights weights)
     : m_maxDepth(std::max(1, maxDepth)), m_weights(weights) {}
 
 std::optional<Move> AlphaBetaAgent::chooseAction(const GameCore& core) const {
-    const auto actions = core.legalActions();
-    if (actions.empty()) return std::nullopt;
+    const auto scoredActions = scoreActions(core);
+    if (scoredActions.empty()) return std::nullopt;
+    return std::max_element(scoredActions.begin(), scoredActions.end(),
+                            [](const ScoredAction& lhs, const ScoredAction& rhs) {
+        return lhs.score < rhs.score;
+    })->move;
+}
 
+std::vector<ScoredAction> AlphaBetaAgent::scoreActions(const GameCore& core) const {
+    std::vector<ScoredAction> scoredActions;
+    const auto actions = core.legalActions();
+    scoredActions.reserve(actions.size());
     const Player perspective = core.currentPlayer();
-    double bestScore = -std::numeric_limits<double>::infinity();
-    std::optional<Move> bestMove;
     for (const Move& move : actions) {
         GameCore child = core.fork();
         if (!child.applyAction(move)) continue;
@@ -29,12 +39,41 @@ std::optional<Move> AlphaBetaAgent::chooseAction(const GameCore& core) const {
                                     -std::numeric_limits<double>::infinity(),
                                     std::numeric_limits<double>::infinity(),
                                     perspective);
-        if (!bestMove || score > bestScore) {
-            bestScore = score;
-            bestMove = move;
-        }
+        scoredActions.push_back({move, score});
     }
-    return bestMove;
+    return scoredActions;
+}
+
+std::optional<Move> AlphaBetaAgent::chooseActionWithTemperature(
+    const GameCore& core, double temperature, std::uint64_t seed) const {
+    const auto scoredActions = scoreActions(core);
+    return selectAction(scoredActions, temperature, seed);
+}
+
+std::optional<Move> AlphaBetaAgent::selectAction(
+    const std::vector<ScoredAction>& scoredActions,
+    double temperature, std::uint64_t seed) {
+    if (scoredActions.empty()) return std::nullopt;
+    if (temperature <= 0.0) {
+        return std::max_element(scoredActions.begin(), scoredActions.end(),
+                                [](const ScoredAction& lhs, const ScoredAction& rhs) {
+            return lhs.score < rhs.score;
+        })->move;
+    }
+
+    const double bestScore = std::max_element(
+        scoredActions.begin(), scoredActions.end(),
+        [](const ScoredAction& lhs, const ScoredAction& rhs) {
+            return lhs.score < rhs.score;
+        })->score;
+    std::vector<double> weights;
+    weights.reserve(scoredActions.size());
+    for (const auto& action : scoredActions) {
+        weights.push_back(std::exp((action.score - bestScore) / temperature));
+    }
+    std::mt19937_64 generator(seed);
+    std::discrete_distribution<std::size_t> distribution(weights.begin(), weights.end());
+    return scoredActions[distribution(generator)].move;
 }
 
 double AlphaBetaAgent::search(const GameCore& core, int depth,

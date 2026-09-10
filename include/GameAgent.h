@@ -1,8 +1,15 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 #include "GameCore.h"
+
+struct ScoredAction {
+    Move move;
+    double score = 0.0;
+};
 
 class GameAgent {
 public:
@@ -29,6 +36,13 @@ public:
 
     std::string name() const override { return "AlphaBeta-Baseline"; }
     std::optional<Move> chooseAction(const GameCore& core) const override;
+    std::optional<Move> chooseActionWithTemperature(const GameCore& core,
+                                                    double temperature,
+                                                    std::uint64_t seed) const;
+    std::vector<ScoredAction> scoreActions(const GameCore& core) const;
+    static std::optional<Move> selectAction(const std::vector<ScoredAction>& actions,
+                                            double temperature,
+                                            std::uint64_t seed);
 
     int maxDepth() const { return m_maxDepth; }
     double evaluate(const GameCore& core, Player perspective) const;

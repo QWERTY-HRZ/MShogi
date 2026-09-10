@@ -39,6 +39,49 @@ add_library(MShogiCore STATIC
 
 target_include_directories(MShogiCore PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
+if(MINGW)
+    get_filename_component(MSHOGI_MINGW_BIN_DIR ${CMAKE_CXX_COMPILER} DIRECTORY)
+    get_filename_component(MSHOGI_MINGW_ROOT ${MSHOGI_MINGW_BIN_DIR} DIRECTORY)
+    set(MSHOGI_ZLIB_INCLUDE_DIR ${MSHOGI_MINGW_ROOT}/x86_64-w64-mingw32/include)
+    find_library(MSHOGI_ZLIB_LIBRARY NAMES z
+        PATHS ${MSHOGI_MINGW_ROOT}/x86_64-w64-mingw32/lib
+        NO_DEFAULT_PATH
+        REQUIRED
+    )
+    add_library(MShogiZlib UNKNOWN IMPORTED)
+    set_target_properties(MShogiZlib PROPERTIES
+        IMPORTED_LOCATION ${MSHOGI_ZLIB_LIBRARY}
+        INTERFACE_INCLUDE_DIRECTORIES ${MSHOGI_ZLIB_INCLUDE_DIR}
+    )
+else()
+    find_package(ZLIB REQUIRED)
+    add_library(MShogiZlib ALIAS ZLIB::ZLIB)
+endif()
+
+add_library(MShogiSelfPlay STATIC
+    SelfPlay.cpp
+    ../include/SelfPlay.h
+)
+
+target_include_directories(MShogiSelfPlay PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(MShogiSelfPlay PUBLIC MShogiCore MShogiZlib)
+
+add_executable(mshogi_selfplay SelfPlayMain.cpp)
+target_link_libraries(mshogi_selfplay PRIVATE MShogiSelfPlay)
+execute_process(
+    COMMAND git rev-parse --short=12 HEAD
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    OUTPUT_VARIABLE MSHOGI_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT MSHOGI_GIT_COMMIT)
+    set(MSHOGI_GIT_COMMIT unknown)
+endif()
+target_compile_definitions(mshogi_selfplay PRIVATE
+    MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
+)
+
 if(NOT MSHOGI_BUILD_APP)
     return()
 endif()

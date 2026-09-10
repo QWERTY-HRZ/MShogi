@@ -8,10 +8,12 @@
     tst_setupdialog.cpp
     tst_gamecore.cpp
     tst_gameagent.cpp
+    tst_selfplay.cpp
 )
 
 target_link_libraries(MShogiTests PRIVATE
     MShogiLib
+    MShogiSelfPlay
     gtest
     Qt6::Core
     Qt6::Widgets

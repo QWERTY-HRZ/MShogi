@@ -62,6 +62,18 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
     cmake -S . -B build-headless -G Ninja -DMSHOGI_BUILD_APP=OFF -DBUILD_TESTING=OFF
     cmake --build build-headless --parallel
 
+## 自博弈数据
+
+`mshogi_selfplay` 生成可重放的 gzip 压缩 JSONL：
+
+    ./Src/Build/MinGW_13_1_0-Release/src/mshogi_selfplay.exe --games 100 --output ./Dataset/AI/v1.10.0/selfplay/train_0001.jsonl.gz --seed 20260910 --depth 2 --temperature 1.0 --temperature-plies 12 --max-plies 120
+
+使用 `MShogi` Conda 环境校验数据：
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/inspect_selfplay.py ./Dataset/AI/v1.10.0/selfplay/train_0001.jsonl.gz
+
+相同规则版本、提交、参数和随机种子会生成相同记录。达到 `max-plies` 的对局标记为截断，`winner` 和局面 `outcome` 为 0，不会伪装成规则和棋。
+
 ## 许可证
 
 项目采用 [GNU GPL v3](LICENSE)。

@@ -60,6 +60,18 @@ Training or self-play hosts can build the headless core without Qt:
     cmake -S . -B build-headless -G Ninja -DMSHOGI_BUILD_APP=OFF -DBUILD_TESTING=OFF
     cmake --build build-headless --parallel
 
+## Self-Play Data
+
+`mshogi_selfplay` writes replayable gzip-compressed JSONL shards:
+
+    ./Src/Build/MinGW_13_1_0-Release/src/mshogi_selfplay.exe --games 100 --output ./Dataset/AI/v1.10.0/selfplay/train_0001.jsonl.gz --seed 20260910 --depth 2 --temperature 1.0 --temperature-plies 12 --max-plies 120
+
+Validate a shard with the `MShogi` Conda environment:
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/inspect_selfplay.py ./Dataset/AI/v1.10.0/selfplay/train_0001.jsonl.gz
+
+The same rules, commit, arguments, and seed produce the same records. Games reaching `max-plies` are marked as truncated with zero winner/outcomes; they are not presented as rules-level draws.
+
 ## License
 
 MShogi is licensed under the [GNU General Public License v3](LICENSE).
