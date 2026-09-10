@@ -7,6 +7,8 @@
     PieceItem.cpp
     GameScene.cpp
     ChessClock.cpp
+    OpeningDraw.cpp
+    GameSetupDialog.cpp
 )
 
 set(MSHOGI_LIB_HEADERS
@@ -20,6 +22,8 @@ set(MSHOGI_LIB_HEADERS
     ../include/GameScene.h
     ../include/GameConstants.h
     ../include/ChessClock.h
+    ../include/OpeningDraw.h
+    ../include/GameSetupDialog.h
 )
 
 set(MSHOGI_RESOURCES ../resources.qrc)
@@ -30,7 +34,7 @@ add_library(MShogiLib STATIC
     ${MSHOGI_RESOURCES}
 )
 
-target_include_directories(MShogiLib PUBLIC ../include)
+target_include_directories(MShogiLib PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 target_link_libraries(MShogiLib PUBLIC
     Qt6::Core

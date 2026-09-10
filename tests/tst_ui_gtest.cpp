@@ -1,144 +1,117 @@
 ﻿#include <gtest/gtest.h>
+#include <algorithm>
 #include <QApplication>
+#include <QGroupBox>
 #include <QGraphicsView>
-#include <QGraphicsScene>
-#include <QMouseEvent>
-#include <QTimer>
-#include <QDebug>
-#include "../include/UIController.h"
-#include "../include/GameScene.h"
-#include "../include/PieceItem.h"
-
-int main(int argc, char *argv[]) {
-    QApplication app(argc, argv);
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+#include <QLabel>
+#include <QTest>
+#include "UIController.h"
 
 class UITest : public ::testing::Test {
 protected:
     UIController* window = nullptr;
+    GameEngine* game = nullptr;
     GameScene* scene = nullptr;
     QGraphicsView* view = nullptr;
 
     void SetUp() override {
-        window = new UIController();
-        window->resize(1200, 1000);
+        window = new UIController(nullptr, false);
+        window->resize(1200, 900);
         window->show();
 
+        game = window->findChild<GameEngine*>();
         view = window->findChild<QGraphicsView*>();
-        ASSERT_TRUE(view != nullptr);
-        view->resetTransform();
-        view->centerOn(250, 400);
+        ASSERT_NE(game, nullptr);
+        ASSERT_NE(view, nullptr);
 
         scene = qobject_cast<GameScene*>(view->scene());
-        ASSERT_TRUE(scene != nullptr);
+        ASSERT_NE(scene, nullptr);
 
+        game->startGame(300, 0);
+        QApplication::processEvents();
+        view->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);
         QApplication::processEvents();
     }
 
     void TearDown() override {
         delete window;
-        window = nullptr;
     }
 
-    void simulateDrag(QGraphicsView* viewPtr, QPoint start, QPoint end) {
-        if (!viewPtr) return;
-        QMouseEvent pressEvent(QEvent::MouseButtonPress, start, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-        QApplication::sendEvent(viewPtr->viewport(), &pressEvent);
-        QApplication::processEvents();
-
-        for (int i = 1; i <= 10; ++i) {
-            QPoint mid = start + (end - start) * (i / 10.0);
-            QMouseEvent moveEvent(QEvent::MouseMove, mid, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-            QApplication::sendEvent(viewPtr->viewport(), &moveEvent);
-            QApplication::processEvents();
-        }
-
-        QMouseEvent releaseEvent(QEvent::MouseButtonRelease, end, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-        QApplication::sendEvent(viewPtr->viewport(), &releaseEvent);
-        QApplication::processEvents();
+    QPoint cellCenter(int x, int y) const {
+        const QPointF scenePoint(
+            GameScene::BOARD_OFFSET_X + x * GameScene::CELL_SIZE + GameScene::CELL_SIZE / 2.0,
+            GameScene::BOARD_OFFSET_Y + y * GameScene::CELL_SIZE + GameScene::CELL_SIZE / 2.0);
+        return view->mapFromScene(scenePoint);
     }
 
-    // 辅助函数：检查棋子位置
-    bool checkPieceAt(int gridX, int gridY, PieceType type, Player owner) {
-        QList<QGraphicsItem*> items = scene->items();
-        for (auto item : items) {
-            PieceItem* p = dynamic_cast<PieceItem*>(item);
-            if (p && p->getGridX() == gridX && p->getGridY() == gridY &&
-                p->getType() == type && p->getOwner() == owner) {
-                return true;
-            }
+    void drag(const QPoint& start, const QPoint& end) {
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, start);
+        for (int step = 1; step <= 5; ++step) {
+            const QPoint point = start + (end - start) * step / 5;
+            QTest::mouseMove(view->viewport(), point);
         }
-        return false;
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, end);
+        QApplication::processEvents();
+        QApplication::processEvents();
     }
 };
 
-// 用例 1: 合法拖拽 (先手兵前进)
-TEST_F(UITest, TestValidDrag) {
-    QApplication::processEvents();
-    if (!view || !scene) return;
+TEST_F(UITest, ValidPawnDragUpdatesEngineAndScene) {
+    drag(cellCenter(2, 4), cellCenter(2, 3));
 
-    // 目标：Sente Pawn (2,1) -> (2,2)
-    int offX = GameScene::BOARD_OFFSET_X, offY = GameScene::BOARD_OFFSET_Y;
-    int cellSize = GameScene::CELL_SIZE;
-
-    // 起点 (2,1)
-    QPointF startScene = QPointF(offX + 2*cellSize + cellSize/2, offY + (5-1)*cellSize + cellSize/2);
-    // 终点 (2,2)
-    QPointF endScene = QPointF(offX + 2*cellSize + cellSize/2, offY + (5-2)*cellSize + cellSize/2);
-
-    simulateDrag(view, view->mapFromScene(startScene), view->mapFromScene(endScene));
-    QApplication::processEvents();
-
-    EXPECT_TRUE(checkPieceAt(2, 2, PieceType::Pawn, Player::Sente)) << "Valid move failed";
+    const auto piece = game->getBoard().getPiece(2, 3);
+    ASSERT_NE(piece, nullptr);
+    EXPECT_EQ(piece->getType(), PieceType::Pawn);
+    EXPECT_EQ(piece->getOwner(), Player::Sente);
+    EXPECT_EQ(game->getCurrentPlayer(), Player::Gote);
 }
 
-// 用例 2: 非法规则拖拽 (先手兵后退)
-TEST_F(UITest, TestInvalidRuleDrag) {
-    QApplication::processEvents();
-    if (!view || !scene) return;
+TEST_F(UITest, InvalidPawnDragLeavesBoardUnchanged) {
+    drag(cellCenter(2, 4), cellCenter(3, 4));
 
-    // 目标：Sente Pawn (2,1) -> (2,0) [后退，非法]
-    // 为了确保测试有效，先确认 (2,0) 是空的? 不，(2,0) 是 Sente King。
-    // 那我们试着横移 (2,1) -> (3,1)。兵不能横移。
-
-    int offX = GameScene::BOARD_OFFSET_X, offY = GameScene::BOARD_OFFSET_Y;
-    int cellSize = GameScene::CELL_SIZE;
-
-    // 起点 (2,1)
-    QPointF startScene = QPointF(offX + 2*cellSize + cellSize/2, offY + (5-1)*cellSize + cellSize/2);
-    // 终点 (3,1) (右移一格)
-    QPointF endScene = QPointF(offX + 3*cellSize + cellSize/2, offY + (5-1)*cellSize + cellSize/2);
-
-    simulateDrag(view, view->mapFromScene(startScene), view->mapFromScene(endScene));
-    QApplication::processEvents();
-
-    // 断言：移动失败，棋子应该还在原位 (2,1)，或者被刷新回原位
-    // 且 (3,1) 不应该有该棋子
-    EXPECT_TRUE(checkPieceAt(2, 1, PieceType::Pawn, Player::Sente)) << "Piece should remain at start";
-    EXPECT_FALSE(checkPieceAt(3, 1, PieceType::Pawn, Player::Sente)) << "Piece invalid move succeeded";
+    EXPECT_NE(game->getBoard().getPiece(2, 4), nullptr);
+    EXPECT_EQ(game->getBoard().getPiece(3, 4), nullptr);
+    EXPECT_EQ(game->getCurrentPlayer(), Player::Sente);
 }
 
-// 用例 3: 非法轮次拖拽 (先手回合拖动后手棋子)
-TEST_F(UITest, TestInvalidTurnDrag) {
-    QApplication::processEvents();
-    if (!view || !scene) return;
+TEST_F(UITest, OpponentPieceCannotBeDragged) {
+    drag(cellCenter(2, 1), cellCenter(2, 2));
 
-    // 目标：Gote Pawn (2,4) -> (2,3) [前进，路径合法，但轮次非法]
-    // 游戏开始默认先手回合
+    const auto piece = game->getBoard().getPiece(2, 1);
+    ASSERT_NE(piece, nullptr);
+    EXPECT_EQ(piece->getOwner(), Player::Gote);
+    EXPECT_EQ(game->getBoard().getPiece(2, 2), nullptr);
+}
 
-    int offX = GameScene::BOARD_OFFSET_X, offY = GameScene::BOARD_OFFSET_Y;
-    int cellSize = GameScene::CELL_SIZE;
-
-    // 起点 (2,4)
-    QPointF startScene = QPointF(offX + 2*cellSize + cellSize/2, offY + (5-4)*cellSize + cellSize/2);
-    // 终点 (2,3)
-    QPointF endScene = QPointF(offX + 2*cellSize + cellSize/2, offY + (5-3)*cellSize + cellSize/2);
-
-    simulateDrag(view, view->mapFromScene(startScene), view->mapFromScene(endScene));
+TEST_F(UITest, PausedBoardCannotBeDragged) {
+    game->pauseGame();
     QApplication::processEvents();
 
-    // 断言：移动失败，后手兵还在 (2,4)
-    EXPECT_TRUE(checkPieceAt(2, 4, PieceType::Pawn, Player::Gote)) << "Opponent piece moved during wrong turn";
+    drag(cellCenter(2, 4), cellCenter(2, 3));
+
+    EXPECT_EQ(game->getCurrentState(), GameState::Paused);
+    EXPECT_NE(game->getBoard().getPiece(2, 4), nullptr);
+    EXPECT_EQ(game->getBoard().getPiece(2, 3), nullptr);
+}
+
+TEST_F(UITest, MatchInfoContainsOnlyStatusAndOpeningNumber) {
+    QLabel* statusLabel = window->findChild<QLabel*>("lblStatus");
+    QLabel* openingLabel = window->findChild<QLabel*>("lblOpeningDraw");
+    ASSERT_NE(statusLabel, nullptr);
+    ASSERT_NE(openingLabel, nullptr);
+
+    auto* matchInfoGroup = qobject_cast<QGroupBox*>(statusLabel->parentWidget());
+    ASSERT_NE(matchInfoGroup, nullptr);
+    EXPECT_EQ(matchInfoGroup->title(), "对局信息");
+    EXPECT_EQ(openingLabel->parentWidget(), matchInfoGroup);
+    EXPECT_EQ(matchInfoGroup->findChildren<QLabel*>(
+                  QString(), Qt::FindDirectChildrenOnly).size(), 2);
+
+    const auto groups = window->findChildren<QGroupBox*>();
+    const auto clockIt = std::find_if(groups.begin(), groups.end(), [](QGroupBox* group) {
+        return group->title() == "棋钟";
+    });
+    ASSERT_NE(clockIt, groups.end());
+    EXPECT_EQ((*clockIt)->findChildren<QLabel*>(
+                  QString(), Qt::FindDirectChildrenOnly).size(), 3);
 }

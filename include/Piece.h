@@ -1,9 +1,4 @@
-﻿#ifndef PIECE_H
-#define PIECE_H
-
-#endif // PIECE_H
-
-#pragma once
+﻿#pragma once
 #include <string>
 
 enum class Player {
@@ -27,7 +22,7 @@ public:
     Player getOwner() const { return m_owner; }
     PieceType getType() const { return m_type; }
     virtual std::string getName() const = 0;
-    // 手鞠管理
+    // 手驹管理
     void setTurnsInHand(int v) { m_turnsInHand = v; }
     void incrementTurnsInHand() { m_turnsInHand++; }
     void decrementTurnsInHand() { if (m_turnsInHand > 0) m_turnsInHand--; } // Undo用

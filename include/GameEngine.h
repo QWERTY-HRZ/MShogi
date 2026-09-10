@@ -18,6 +18,14 @@ enum class GameState {
     End
 };
 
+enum class GameEndReason {
+    KingCaptured,
+    BaselineEntry,
+    NoLegalAction,
+    Timeout,
+    Resignation
+};
+
 class GameEngine : public QObject {
     Q_OBJECT
 
@@ -33,7 +41,7 @@ public:
     // 处理投降信息
     void resign();
     // 结束游戏
-    void finishGame(int result);
+    void finishGame(int result, GameEndReason reason);
     // 暂停与继续
     void pauseGame();
     void resumeGame();
@@ -52,7 +60,8 @@ public:
 
 signals:
     void stateChanged(GameState newState);
-    void gameEnded(int result);
+    void gameEnded(int result, GameEndReason reason);
+    void kingThreatStatusChanged(bool senteThreatened, bool goteThreatened);
     // 移动执行成功
     void moveExecuted(const std::string& notation);
     // 悔棋完成

@@ -1,4 +1,4 @@
-﻿#include "../include/GameScene.h"
+﻿#include "GameScene.h"
 #include <QGraphicsLineItem>
 #include <QBrush>
 #include <QPixmap>
@@ -66,6 +66,10 @@ void GameScene::drawHands() {
         // 检查回合数 为禁手期棋子添加灰色蒙版
         int t = piece->getTurnsInHand();
         if (t >= 1 && t <= 3) item->setForbidden(true);
+        // 非当前玩家或暂停/终局时，手驹与盘面棋子保持相同的拖拽限制。
+        if (piece->getOwner() != m_engine->getCurrentPlayer() || !isGamePlaying()) {
+            item->setFlag(QGraphicsItem::ItemIsMovable, false);
+        }
         addItem(item);
         gX += GameConstants::CELL_SIZE + 10;
     }
@@ -78,6 +82,10 @@ void GameScene::drawHands() {
         item->setPos(sX, sY);
         int t = piece->getTurnsInHand();
         if (t >= 1 && t <= 3) item->setForbidden(true);
+        // 非当前玩家或暂停/终局时，手驹与盘面棋子保持相同的拖拽限制。
+        if (piece->getOwner() != m_engine->getCurrentPlayer() || !isGamePlaying()) {
+            item->setFlag(QGraphicsItem::ItemIsMovable, false);
+        }
         addItem(item);
         sX += GameConstants::CELL_SIZE + 10;
     }

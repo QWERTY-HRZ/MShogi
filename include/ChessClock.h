@@ -34,9 +34,9 @@ private slots:
 
 private:
     QTimer* m_timer;
-    int m_senteTime;
-    int m_goteTime;
-    int m_totalTimeSetting;
-    int m_increment;
-    Player m_currentPlayer;
+    int m_senteTime = 0;
+    int m_goteTime = 0;
+    int m_totalTimeSetting = 0;
+    int m_increment = 0;
+    Player m_currentPlayer = Player::Sente;
 };

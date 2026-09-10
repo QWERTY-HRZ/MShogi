@@ -25,12 +25,13 @@ public:
     bool getKingInBaseFlag(Player p) const;
     void setKingInBaseFlag(Player p, bool val);
 
-    // 手驹区 添加/去除
+    // 手驹按具体对象管理，避免同类棋子的禁手状态互相混淆。
     void addToHand(std::shared_ptr<Piece> piece);
-    bool removeFromHand(Player p, PieceType type);
-    // 返回手驹区：改为指针列表
+    std::shared_ptr<Piece> takeFromHand(Player p, PieceType type);
+    bool removeFromHand(const std::shared_ptr<Piece>& piece);
+    bool hasDroppablePiece(Player p, PieceType type) const;
     const std::vector<std::shared_ptr<Piece>>& getHand(Player p) const;
-    // 新增：更新回合数
+    // 正数推进禁手回合，负数用于悔棋回退。
     void updateHandTurns(int delta);
 
     static constexpr int ROWS = GameConstants::ROWS;
@@ -47,4 +48,6 @@ private:
     // 记录是否下底
     bool m_senteFlag;
     bool m_goteFlag;
+
+    static bool isDroppable(const std::shared_ptr<Piece>& piece);
 };

@@ -45,6 +45,10 @@ QLabel#lblStatus {
     font-weight: bold;
 }
 
+QLabel#lblOpeningDraw {
+    color: #4A4A4A;
+}
+
 QLabel#lblGameInfo {
     color: #666666;
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);

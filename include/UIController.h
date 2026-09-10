@@ -5,13 +5,14 @@
 #include <QTextEdit>
 #include <QTimer>
 #include <QPushButton>
+#include <QString>
 #include "GameEngine.h"
 #include "GameScene.h"
 
 class UIController : public QMainWindow {
     Q_OBJECT
 public:
-    explicit UIController(QWidget *parent = nullptr);
+    explicit UIController(QWidget *parent = nullptr, bool promptOnStart = true);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -21,7 +22,8 @@ protected:
 private slots:
     void onStateChanged(GameState newState);
     void onMoveExecuted(const std::string& notation);
-    void onGameEnded(int result);
+    void onGameEnded(int result, GameEndReason reason);
+    void onKingThreatStatusChanged(bool senteThreatened, bool goteThreatened);
 
     // 统一更新时间
     void onUpdateTimer();
@@ -36,19 +38,22 @@ private slots:
 
 private:
     void setupUi();
+    void scheduleBoardRefresh();
+    void refreshHistory();
     // 处理移动请求
     bool handleMoveRequest(const Move& move);
     //开局设置
-    void promptSettingsAndStart();
+    bool promptSettingsAndStart();
 
     GameEngine* m_gameEngine;
     GameScene* m_scene;
     QGraphicsView* m_view;
 
-    QLabel* m_lblStatus;      // 第一行: 对局状态
-    QLabel* m_lblGameInfo;    // 第二行: 总用时与设置
-    QLabel* m_lblSenteTurn;   // 第三行: 先手时间
-    QLabel* m_lblGoteTurn;    // 第四行: 后手时间
+    QLabel* m_lblStatus;
+    QLabel* m_lblOpeningDraw;
+    QLabel* m_lblGameInfo;
+    QLabel* m_lblSenteTurn;
+    QLabel* m_lblGoteTurn;
 
     QTextEdit* m_txtHistory;
     // 按钮指针
@@ -58,6 +63,10 @@ private:
     QPushButton* m_btnResign;
     // 背景图片
     QPixmap m_bgPixmap;
+
+    QString m_sentePlayerName = "玩家一";
+    QString m_gotePlayerName = "玩家二";
+    QString m_checkNotice;
 
     // 不在 UI 中计时
     // QTimer* m_uiTimer;

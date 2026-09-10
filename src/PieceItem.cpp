@@ -1,5 +1,5 @@
-﻿#include "../include/PieceItem.h"
-#include "../include/GameScene.h"
+﻿#include "PieceItem.h"
+#include "GameScene.h"
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
 #include <QCursor>

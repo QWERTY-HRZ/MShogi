@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include "Board.h"
-#include "../include/GameConstants.h"
+#include "GameConstants.h"
 #include <optional>
 
 struct Move {
@@ -32,6 +32,11 @@ public:
     bool validateMove(const Board& board, const Move& move) const;
     // 判定升变
     bool checkPromotion(const Board& board, const Move& move) const;
+
+    // 同时检查盘面行子和已解禁手驹，判断该方是否还有合法着法。
+    bool hasAnyLegalAction(const Board& board, Player player) const;
+    // 仅检测王是否正被攻击，不限制被将军方的下一步选择。
+    bool isKingThreatened(const Board& board, Player kingOwner) const;
 
     // 判定游戏是否结束
     int isGameOver(Board& board) const;

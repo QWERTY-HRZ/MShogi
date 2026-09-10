@@ -22,6 +22,6 @@ namespace GameConstants {
     static constexpr double MIN_DRAG_DISTANCE = 15.0;
 
     // 棋盘初始长宽
-    const int INITIAL_WIDTH = 1280;
-    const int INITIAL_HEIGHT = 960;
+    static constexpr int INITIAL_WIDTH = 1280;
+    static constexpr int INITIAL_HEIGHT = 960;
 }

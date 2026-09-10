@@ -1,46 +1,65 @@
-# MShogi
-
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+# MShogi (Mixed Shogi)
 
 **English** | [简体中文](README-CN.md)
 
-MShogi is a cross-platform desktop Japanese Chess (Shogi) application built with C++ and Qt. It features a complete rules engine, a beautiful wood-textured UI, and various game tools designed for an immersive Shogi experience.
+MShogi is a two-player desktop board game written in C++17 and Qt 6. It uses a 5-column by 6-row board and combines custom king, rook, bishop, pawn, and promoted-pawn rules with captures, piece drops, promotion, and baseline-entry victories.
 
-## 📸 Screenshots
+## Features
 
-![MShogi Gameplay](assets/1.png)
+- Canonical turn and board-state management, with Sente starting from the bottom.
+- Integrated match setup and odd/even opening draw for player names and clocks.
+- Long non-capturing rook moves, two-square vertical rook assaults, screened bishop captures, and mandatory pawn promotion.
+- Per-piece hand cooldowns, legal-move highlighting, and drag-and-drop placement.
+- Notation, undo, restart, resignation, pause, and resume controls.
+- Per-player clocks, move increments, elapsed match time, and timeout losses.
+- Explicit end reasons for king capture, baseline entry, no legal action, timeout, and resignation.
+- A scalable Qt Graphics View interface with QSS, icons, and sound resources.
+- Google Test coverage for the board, rules, engine, and UI dragging.
 
-![MShogi Interface](assets/2.png)
+The current rules are documented in MShogi_Rule.md at the managed workspace root.
 
-## ✨ Features
+## Reference Toolchain
 
-* [cite_start]**Complete Rule Engine**: Accurately implements Shogi rules, including piece movements and state management.
-* [cite_start]**Interactive UI**: Supports explicit mouse movements (drag and drop) and displays legal moves (highlighting) for the selected piece.
-* [cite_start]**Game History & Notation**: Real-time recording of the game history/log for easy review and analysis.
-* **Match Clock**: Fully functional dual-timer system (Sente/Gote) with customizable total time and increment settings.
-* [cite_start]**Game Controls**: Supports Pause/Resume, Undo, Resign, and Resetting the board.
-* **High-DPI Support**: Automatically scales and renders crisp text and vector graphics on modern high-resolution displays.
+- Qt 6.8.3: Core, Gui, Widgets, Multimedia, and Test
+- MinGW 13.1.0
+- CMake 4.3.2
+- Ninja
+- C++17
 
-## 🛠️ Build Instructions
+CMake accepts Qt 6.8 or a newer Qt 6 release. Google Test 1.14.0 is loaded offline from the archive committed under tests/.
 
-### Prerequisites
+## Layout
 
-* **C++ Compiler**: GCC, Clang, or MSVC (C++17 or later recommended).
-* **Qt Framework**: Qt 5.12+ (requires `Widgets` and `Gui` modules).
-* **Build Tool**: CMake or qmake.
-* **Nix** (optional): A [Nix flake](https://nixos.wiki/wiki/Flakes) is provided for a reproducible development environment with all dependencies pre-configured.
+- include/: public headers and core types.
+- src/: rules, game engine, clocks, scene, UI, and application entry point.
+- tests/: Google Test and Qt Test regression coverage.
+- res/ and resources.qrc: style, board texture, button icons, and sounds.
+- assets/: README screenshots.
 
-### Compilation Steps (using Qt Creator)
+In the managed workspace, this repository lives at ./Src/Mixed-Shogi/, and all generated files belong under ./Src/Build/.
 
-1. Clone the repository: `git clone https://github.com/QWERTY-HRZ/MShogi.git`
-2. Choose the .pro (qmake) or CMakeLists.txt (CMake) file in the repository.
-3. Open Qt Creator and select File -> Open File or Project....
-4. Configure the project with your installed Qt kit.
-5. Click Build (or press Ctrl+B) and Run (or press Ctrl+R).
+## Build and Test
 
-### Development with Nix Flake
+From the managed workspace root:
 
-If you have [Nix](https://nixos.org/) with [flakes](https://nixos.wiki/wiki/Flakes) enabled:
+    cmake -S ./Src/Mixed-Shogi -B ./Src/Build/MinGW_13_1_0-Debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=D:/Apps_D/Qt/6.8.3/mingw_64
+    cmake --build ./Src/Build/MinGW_13_1_0-Debug --parallel
+    ctest --test-dir ./Src/Build/MinGW_13_1_0-Debug --output-on-failure
 
-1. Enter the development shell: `nix develop` (or run `direnv allow` if you use [direnv](https://direnv.net/)).
-2. Build the project with CMake as usual — all Qt dependencies are provided by the flake.
+For a standalone clone, use an ignored local build directory instead:
+
+    cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=D:/Apps_D/Qt/6.8.3/mingw_64
+    cmake --build build --parallel
+    ctest --test-dir build --output-on-failure
+
+The application target is MShogiApp; the test target is MShogiTests. For a release-only build, configure with -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF.
+
+## License
+
+MShogi is licensed under the [GNU General Public License v3](LICENSE).
+
+## Screenshots
+
+![MShogi gameplay](assets/1.png)
+
+![MShogi interface](assets/2.png)

@@ -1,4 +1,5 @@
-﻿#include "../include/Board.h"
+﻿#include "Board.h"
+#include <algorithm>
 
 Board::Board()
     // 记录先后手的底线 分别为 5/0
@@ -42,7 +43,8 @@ std::vector<std::pair<int, int>> Board::findPieces(Player p, PieceType type) con
 }
 
 bool Board::placePiece(int x, int y, std::shared_ptr<Piece> piece) {
-    if (!isInside(x, y)) return false;
+    // 普通摆放只接受空格；吃子覆盖统一由 movePiece 处理。
+    if (!isInside(x, y) || !piece || m_grid[x][y]) return false;
     m_grid[x][y] = piece;
     return true;
 }
@@ -68,7 +70,7 @@ bool Board::movePiece(int fromX, int fromY, int toX, int toY) {
 
 int Board::getBottomLine(Player p) const {
     // 获取【对方】的底线
-    return (p == Player::Sente) ? GameConstants::GOTE_BASE_Y : GameConstants::SENTE_BASE_Y;
+    return (p == Player::Sente) ? m_goteBottomLine : m_senteBottomLine;
 }
 
 bool Board::getKingInBaseFlag(Player p) const {
@@ -85,27 +87,42 @@ void Board::addToHand(std::shared_ptr<Piece> piece) {
     if (piece) m_hands[piece->getOwner()].push_back(piece);
 }
 
-bool Board::removeFromHand(Player p, PieceType type) {
-    // 移除手驹区棋子 但禁手棋子不能动
+bool Board::isDroppable(const std::shared_ptr<Piece>& piece) {
+    if (!piece) return false;
+    const int turns = piece->getTurnsInHand();
+    // 1~3 表示刚被吃后至下一次己方回合结束前的禁手期。
+    return turns == 0 || turns > 3;
+}
+
+std::shared_ptr<Piece> Board::takeFromHand(Player p, PieceType type) {
+    // 只取已解禁的具体对象，不再按类型强制移除禁手棋子。
     auto& list = m_hands[p];
     for (auto it = list.begin(); it != list.end(); ++it) {
-        if ((*it)->getType() == type) {
-            int t = (*it)->getTurnsInHand();
-            // 如果不在禁手期 移除该棋子
-            if (t == 0 || t > 3) {
-                list.erase(it);
-                return true;
-            }
-        }
-    }
-    // 如果没有可用的，强制移除第一个同类 (理论上 UI 会拦截，此处兜底)
-    for (auto it = list.begin(); it != list.end(); ++it) {
-        if ((*it)->getType() == type) {
+        if ((*it)->getType() == type && isDroppable(*it)) {
+            auto piece = *it;
             list.erase(it);
-            return true;
+            return piece;
         }
     }
-    return false;
+    return nullptr;
+}
+
+bool Board::removeFromHand(const std::shared_ptr<Piece>& piece) {
+    // 按对象地址删除，确保悔棋不会误删另一个同类手驹。
+    if (!piece) return false;
+    auto& list = m_hands[piece->getOwner()];
+    const auto it = std::find(list.begin(), list.end(), piece);
+    if (it == list.end()) return false;
+    list.erase(it);
+    return true;
+}
+
+bool Board::hasDroppablePiece(Player p, PieceType type) const {
+    const auto it = m_hands.find(p);
+    if (it == m_hands.end()) return false;
+    return std::any_of(it->second.begin(), it->second.end(), [type](const auto& piece) {
+        return piece->getType() == type && isDroppable(piece);
+    });
 }
 
 const std::vector<std::shared_ptr<Piece>>& Board::getHand(Player p) const {
@@ -126,15 +143,3 @@ void Board::updateHandTurns(int delta) {
         }
     }
 }
-
-//int Board::getHandCount(Player p, PieceType type) const {
-//    // 旧逻辑 拟去除
-//    auto it = m_hands.find(p);
-//    if (it != m_hands.end()) {
-//        auto typeIt = it->second.find(type);
-//        if (typeIt != it->second.end()) {
-//            return typeIt->second;
-//        }
-//    }
-//    return 0;
-//}

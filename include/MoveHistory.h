@@ -1,21 +1,23 @@
 ﻿#pragma once
 
-#include <vector>
-#include <string>
+#include <memory>
 #include <optional>
+#include <string>
+#include <vector>
 #include "RuleEngine.h"
 
 struct HistoryNode {
     Move move;
-    // 被吃掉的棋子类型，用于撤销
+    // 保存被吃棋子的盘面类型，以及进入手驹区后的具体对象。
     std::optional<PieceType> capturedType;
-    // 是否发生了升变，用于侯被吃掉时的撤销
     bool isPromoted;
-    // 记谱文本
+    std::shared_ptr<Piece> capturedHandPiece;
     std::string notation;
-    // 双方剩余时间
-    int senteTimeLeft;
-    int goteTimeLeft;
+    // 保存行棋前快照，悔棋时恢复棋钟和下底判定。
+    int senteTimeBefore;
+    int goteTimeBefore;
+    bool senteKingInBaseBefore;
+    bool goteKingInBaseBefore;
 };
 
 class MoveHistory {
@@ -25,15 +27,16 @@ public:
     std::optional<HistoryNode> peek() const;
 
     bool canUndo() const;
-    bool canRedo() const; // 暂不实现重做分支，通常redo需要另一个栈
+    bool canRedo() const;
+    void clear();
 
-    // 辅助：生成棋谱
-    static std::string generateNotation(const Board& board, const Move& move, const RuleEngine& ruleEngine);
+    static std::string generateNotation(const Board& board, const Move& move,
+                                        PieceType movedType,
+                                        std::optional<PieceType> capturedType = std::nullopt);
 
     const std::vector<HistoryNode>& getHistory() const;
 
 private:
     std::vector<HistoryNode> m_stack;
-    // 支持 Redo
     std::vector<HistoryNode> m_redoStack;
 };

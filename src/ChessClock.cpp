@@ -1,4 +1,4 @@
-#include "../include/ChessClock.h"
+#include "ChessClock.h"
 
 ChessClock::ChessClock(QObject *parent) : QObject(parent), m_timer(new QTimer(this)) {
     // 1 秒触发一次
