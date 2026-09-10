@@ -11,6 +11,39 @@ Board::Board()
     m_grid.resize(COLS, std::vector<std::shared_ptr<Piece>>(ROWS, nullptr));
 }
 
+Board::Board(const Board& other) : Board() {
+    *this = other;
+}
+
+Board& Board::operator=(const Board& other) {
+    if (this == &other) return *this;
+
+    clear();
+    m_senteBottomLine = other.m_senteBottomLine;
+    m_goteBottomLine = other.m_goteBottomLine;
+    m_senteFlag = other.m_senteFlag;
+    m_goteFlag = other.m_goteFlag;
+
+    // 搜索分支必须复制棋子对象，不能共享会变化的手驹禁手计数。
+    for (int x = 0; x < COLS; ++x) {
+        for (int y = 0; y < ROWS; ++y) {
+            const auto source = other.getPiece(x, y);
+            if (!source) continue;
+            auto copy = makePiece(source->getType(), source->getOwner());
+            copy->setTurnsInHand(source->getTurnsInHand());
+            m_grid[x][y] = copy;
+        }
+    }
+    for (const Player player : {Player::Sente, Player::Gote}) {
+        for (const auto& source : other.getHand(player)) {
+            auto copy = makePiece(source->getType(), source->getOwner());
+            copy->setTurnsInHand(source->getTurnsInHand());
+            m_hands[player].push_back(copy);
+        }
+    }
+    return *this;
+}
+
 Board::~Board() { clear(); }
 
 void Board::clear() {

@@ -17,6 +17,9 @@ struct GameSetupResult {
     QString guessingPlayerName;
     int totalSeconds = 300;
     int incrementSeconds = 5;
+    bool playAgainstAi = false;
+    bool aiIsSente = false;
+    int aiDepth = 3;
     OpeningDrawResult openingDraw;
 };
 
@@ -35,6 +38,8 @@ private:
     QLineEdit* m_playerTwoEdit;
     QSpinBox* m_totalMinutesSpin;
     QSpinBox* m_incrementSecondsSpin;
+    QComboBox* m_gameModeCombo;
+    QSpinBox* m_aiDepthSpin;
     QComboBox* m_guessingPlayerCombo;
     QRadioButton* m_oddButton;
     QRadioButton* m_evenButton;

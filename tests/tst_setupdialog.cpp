@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <QDialogButtonBox>
+#include <QComboBox>
 #include <QPushButton>
 #include <QTest>
 #include "GameSetupDialog.h"
@@ -24,4 +25,20 @@ TEST(GameSetupDialogTest, DrawsBeforeAcceptingIntegratedSettings) {
 
     QTest::mouseClick(primaryButton, Qt::LeftButton);
     EXPECT_EQ(dialog.result(), QDialog::Accepted);
+}
+
+TEST(GameSetupDialogTest, HumanVersusAiSettingsAssignTheAiByDrawResult) {
+    GameSetupDialog dialog;
+    auto* modeCombo = dialog.findChild<QComboBox*>("gameModeCombo");
+    auto* buttonBox = dialog.findChild<QDialogButtonBox*>();
+    ASSERT_NE(modeCombo, nullptr);
+    ASSERT_NE(buttonBox, nullptr);
+    modeCombo->setCurrentIndex(1);
+
+    QTest::mouseClick(buttonBox->button(QDialogButtonBox::Ok), Qt::LeftButton);
+    const GameSetupResult& setup = dialog.setupResult();
+    EXPECT_TRUE(setup.playAgainstAi);
+    EXPECT_EQ(setup.aiIsSente, setup.sentePlayerName == "AI");
+    EXPECT_GE(setup.aiDepth, 1);
+    EXPECT_LE(setup.aiDepth, 3);
 }

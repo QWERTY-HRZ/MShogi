@@ -5,8 +5,8 @@
 #include <memory>
 // 音效
 #include <QMediaPlayer>
-#include "Board.h"
-#include "RuleEngine.h"
+#include "GameCore.h"
+#include "GameAgent.h"
 #include "MoveHistory.h"
 #include "ChessClock.h"
 
@@ -46,6 +46,10 @@ public:
     void pauseGame();
     void resumeGame();
 
+    void setAgent(Player player, std::shared_ptr<GameAgent> agent);
+    void clearAgents();
+    bool isAgentTurn() const;
+
     // 查询可走位置
     std::vector<Move> getLegalMoves(int x, int y);
     // 查询可打入位置
@@ -75,8 +79,7 @@ private slots:
 
 private:
     GameState m_currentState;
-    Board m_board;
-    RuleEngine m_ruleEngine;
+    GameCore m_core;
     MoveHistory m_history;
     // 棋钟
     ChessClock* m_clock;
@@ -88,6 +91,10 @@ private:
     QMediaPlayer* m_sndCapture;
     QMediaPlayer* m_sndOpen;
     QMediaPlayer* m_sndEnd;
-    // 创建棋子实例
-    std::shared_ptr<Piece> createPiece(PieceType type, Player owner);
+
+    std::shared_ptr<GameAgent> m_senteAgent;
+    std::shared_ptr<GameAgent> m_goteAgent;
+    quint64 m_positionGeneration = 0;
+
+    void requestAgentMoveIfNeeded();
 };

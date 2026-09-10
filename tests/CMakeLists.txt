@@ -6,6 +6,8 @@
     tst_ui_gtest.cpp
     tst_openingdraw.cpp
     tst_setupdialog.cpp
+    tst_gamecore.cpp
+    tst_gameagent.cpp
 )
 
 target_link_libraries(MShogiTests PRIVATE

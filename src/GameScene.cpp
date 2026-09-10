@@ -169,5 +169,5 @@ void GameScene::toggleHighlight(PieceItem* item) {
 }
 
 bool GameScene::isGamePlaying() const {
-    return m_engine->getCurrentState() == GameState::Playing;
+    return m_engine->getCurrentState() == GameState::Playing && !m_engine->isAgentTurn();
 }

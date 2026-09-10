@@ -1,8 +1,6 @@
 ﻿set(MSHOGI_LIB_SOURCES
     GameEngine.cpp
     UIController.cpp
-    Board.cpp
-    RuleEngine.cpp
     MoveHistory.cpp
     PieceItem.cpp
     GameScene.cpp
@@ -26,6 +24,25 @@ set(MSHOGI_LIB_HEADERS
     ../include/GameSetupDialog.h
 )
 
+add_library(MShogiCore STATIC
+    Board.cpp
+    RuleEngine.cpp
+    GameCore.cpp
+    GameAgent.cpp
+    ../include/Piece.h
+    ../include/Board.h
+    ../include/RuleEngine.h
+    ../include/GameCore.h
+    ../include/GameAgent.h
+    ../include/GameConstants.h
+)
+
+target_include_directories(MShogiCore PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+if(NOT MSHOGI_BUILD_APP)
+    return()
+endif()
+
 set(MSHOGI_RESOURCES ../resources.qrc)
 
 add_library(MShogiLib STATIC
@@ -37,10 +54,12 @@ add_library(MShogiLib STATIC
 target_include_directories(MShogiLib PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 target_link_libraries(MShogiLib PUBLIC
+    MShogiCore
     Qt6::Core
     Qt6::Widgets
     Qt6::Gui
     Qt6::Multimedia
+    Qt6::Concurrent
 )
 
 add_executable(MShogiApp

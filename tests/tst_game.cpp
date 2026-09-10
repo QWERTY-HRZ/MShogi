@@ -1,5 +1,6 @@
 ﻿#include <gtest/gtest.h>
 #include <optional>
+#include <QSignalSpy>
 #include "GameEngine.h"
 
 class GameIntegrationTest : public ::testing::Test {
@@ -145,4 +146,36 @@ TEST_F(GameIntegrationTest, RestartAndResignDoNotLeaveUndoableHistory) {
     EXPECT_FALSE(game.getHistory().canUndo());
     game.undo();
     EXPECT_EQ(game.getCurrentState(), GameState::End);
+}
+
+TEST(GameEngineAgentTest, DeployedAgentMovesWithoutBlockingTheUiThread) {
+    GameEngine game;
+    game.setAgent(Player::Sente, std::make_shared<AlphaBetaAgent>(3));
+    QSignalSpy moveSpy(&game, &GameEngine::moveExecuted);
+
+    game.startGame(300, 0);
+
+    ASSERT_TRUE(moveSpy.wait(3000));
+    EXPECT_EQ(game.getHistory().getHistory().size(), 1u);
+    EXPECT_EQ(game.getCurrentPlayer(), Player::Gote);
+    EXPECT_FALSE(game.isAgentTurn());
+}
+
+TEST(GameEngineAgentTest, UndoReturnsToTheHumanDecisionPoint) {
+    GameEngine game;
+    game.setAgent(Player::Gote, std::make_shared<AlphaBetaAgent>(1));
+    QSignalSpy moveSpy(&game, &GameEngine::moveExecuted);
+    game.startGame(300, 0);
+
+    ASSERT_TRUE(game.makeMove(
+        Move::makeMove(2, 4, 2, 3, Player::Sente)));
+    ASSERT_TRUE(moveSpy.wait(3000));
+    ASSERT_EQ(game.getHistory().getHistory().size(), 2u);
+
+    game.undo();
+
+    EXPECT_TRUE(game.getHistory().getHistory().empty());
+    EXPECT_EQ(game.getCurrentPlayer(), Player::Sente);
+    EXPECT_NE(game.getBoard().getPiece(2, 4), nullptr);
+    EXPECT_EQ(game.getBoard().getPiece(2, 3), nullptr);
 }

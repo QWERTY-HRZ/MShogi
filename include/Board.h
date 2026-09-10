@@ -9,6 +9,10 @@
 class Board {
 public:
     Board();
+    Board(const Board& other);
+    Board& operator=(const Board& other);
+    Board(Board&&) noexcept = default;
+    Board& operator=(Board&&) noexcept = default;
     ~Board();
 
     bool placePiece(int x, int y, std::shared_ptr<Piece> piece);

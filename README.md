@@ -8,6 +8,7 @@ MShogi is a two-player desktop board game written in C++17 and Qt 6. It uses a 5
 
 - Canonical turn and board-state management, with Sente starting from the bottom.
 - Integrated match setup and odd/even opening draw for player names and clocks.
+- Local human-versus-human and human-versus-AI modes with a background Alpha-Beta baseline agent.
 - Long non-capturing rook moves, two-square vertical rook assaults, screened bishop captures, and mandatory pawn promotion.
 - Per-piece hand cooldowns, legal-move highlighting, and drag-and-drop placement.
 - Notation, undo, restart, resignation, pause, and resume controls.
@@ -30,8 +31,8 @@ CMake accepts Qt 6.8 or a newer Qt 6 release. Google Test 1.14.0 is loaded offli
 
 ## Layout
 
-- include/: public headers and core types.
-- src/: rules, game engine, clocks, scene, UI, and application entry point.
+- include/: public headers, the headless GameCore, and the agent interface.
+- src/: rules core, Alpha-Beta agent, game engine, clocks, scene, UI, and application entry point.
 - tests/: Google Test and Qt Test regression coverage.
 - res/ and resources.qrc: style, board texture, button icons, and sounds.
 - assets/: README screenshots.
@@ -53,6 +54,11 @@ For a standalone clone, use an ignored local build directory instead:
     ctest --test-dir build --output-on-failure
 
 The application target is MShogiApp; the test target is MShogiTests. For a release-only build, configure with -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF.
+
+Training or self-play hosts can build the headless core without Qt:
+
+    cmake -S . -B build-headless -G Ninja -DMSHOGI_BUILD_APP=OFF -DBUILD_TESTING=OFF
+    cmake --build build-headless --parallel
 
 ## License
 

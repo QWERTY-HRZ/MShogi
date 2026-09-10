@@ -8,6 +8,7 @@ MShogi 是一款使用 C++17 与 Qt 6 开发的双人桌面棋类游戏。它采
 
 - 完整盘面与轮次管理，先手位于下方并先行。
 - 整合式开局设置与奇偶猜先，可设置玩家名称、棋钟和每步奖励。
+- 支持双人和人机模式；内置后台运行的 Alpha-Beta 基线 AI，可选择搜索深度。
 - 车的长距离空格移动与纵向两格突击、相的隔子吃子、兵到底线升变为侯。
 - 手驹按具体棋子记录禁手回合，支持合法位置提示与拖拽打入。
 - 棋谱、悔棋、重开、认输、暂停与继续。
@@ -32,8 +33,8 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
 
 ## 项目结构
 
-- include/：公开头文件与核心类型。
-- src/：规则、引擎、棋钟、场景、控件和程序入口。
+- include/：公开头文件、无界面 GameCore 与 AI 接口。
+- src/：规则核心、Alpha-Beta 代理、引擎、棋钟、场景、控件和程序入口。
 - tests/：Google Test 与 Qt Test 回归测试。
 - res/、resources.qrc：样式、棋盘背景、按钮图标和音效。
 - assets/：README 展示图片。
@@ -55,6 +56,11 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
     ctest --test-dir build --output-on-failure
 
 程序目标为 MShogiApp，测试目标为 MShogiTests。发布构建时可使用 -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF。
+
+训练或自博弈服务器可在不安装 Qt 的情况下只构建无界面核心：
+
+    cmake -S . -B build-headless -G Ninja -DMSHOGI_BUILD_APP=OFF -DBUILD_TESTING=OFF
+    cmake --build build-headless --parallel
 
 ## 许可证
 

@@ -152,6 +152,12 @@ bool UIController::promptSettingsAndStart() {
 
     // 所有开局参数在同一对话框确认后，再一次性重置并启动对局。
     m_txtHistory->clear();
+    m_gameEngine->clearAgents();
+    if (setup.playAgainstAi) {
+        const Player aiPlayer = setup.aiIsSente ? Player::Sente : Player::Gote;
+        m_gameEngine->setAgent(aiPlayer,
+                               std::make_shared<AlphaBetaAgent>(setup.aiDepth));
+    }
     m_gameEngine->startGame(setup.totalSeconds, setup.incrementSeconds);
     return true;
 }
@@ -200,7 +206,9 @@ void UIController::onStateChanged(GameState newState) {
     scheduleBoardRefresh();
     switch (newState) {
         case GameState::Playing:
-            m_lblStatus->setText(QString("状态: 对局中%1").arg(m_checkNotice));
+            m_lblStatus->setText(m_gameEngine->isAgentTurn()
+                                     ? "状态: AI 思考中"
+                                     : QString("状态: 对局中%1").arg(m_checkNotice));
             m_btnPauseResume->setText(" 暂停");
             m_btnPauseResume->setIcon(QIcon(":/res/icons/btn_pause.svg"));
             m_btnPauseResume->setEnabled(true);
@@ -230,6 +238,9 @@ void UIController::onStateChanged(GameState newState) {
 void UIController::onMoveExecuted(const std::string& notation) {
     m_txtHistory->append(QString::fromStdString(notation));
     m_btnUndo->setEnabled(true);
+    m_lblStatus->setText(m_gameEngine->isAgentTurn()
+                             ? "状态: AI 思考中"
+                             : QString("状态: 对局中%1").arg(m_checkNotice));
     scheduleBoardRefresh();
 }
 
@@ -263,7 +274,9 @@ void UIController::onKingThreatStatusChanged(bool senteThreatened,
     }
 
     if (m_gameEngine->getCurrentState() == GameState::Playing) {
-        m_lblStatus->setText(QString("状态: 对局中%1").arg(m_checkNotice));
+        m_lblStatus->setText(m_gameEngine->isAgentTurn()
+                                 ? "状态: AI 思考中"
+                                 : QString("状态: 对局中%1").arg(m_checkNotice));
     } else if (m_gameEngine->getCurrentState() == GameState::Paused) {
         m_lblStatus->setText(QString("状态: 已暂停%1").arg(m_checkNotice));
     }

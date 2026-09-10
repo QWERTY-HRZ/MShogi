@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <memory>
 #include <string>
 
 enum class Player {
@@ -63,3 +64,14 @@ public:
     explicit Hou(Player owner) : Piece(owner, PieceType::Hou) {}
     std::string getName() const override { return "Hou"; }
 };
+
+inline std::shared_ptr<Piece> makePiece(PieceType type, Player owner) {
+    switch (type) {
+        case PieceType::King: return std::make_shared<King>(owner);
+        case PieceType::Rook: return std::make_shared<Rook>(owner);
+        case PieceType::Bishop: return std::make_shared<Bishop>(owner);
+        case PieceType::Pawn: return std::make_shared<Pawn>(owner);
+        case PieceType::Hou: return std::make_shared<Hou>(owner);
+    }
+    return nullptr;
+}

@@ -18,6 +18,8 @@ GameSetupDialog::GameSetupDialog(QWidget* parent)
       m_playerTwoEdit(new QLineEdit("玩家二", this)),
       m_totalMinutesSpin(new QSpinBox(this)),
       m_incrementSecondsSpin(new QSpinBox(this)),
+      m_gameModeCombo(new QComboBox(this)),
+      m_aiDepthSpin(new QSpinBox(this)),
       m_guessingPlayerCombo(new QComboBox(this)),
       m_oddButton(new QRadioButton("奇数", this)),
       m_evenButton(new QRadioButton("偶数", this)),
@@ -32,6 +34,12 @@ GameSetupDialog::GameSetupDialog(QWidget* parent)
     m_totalMinutesSpin->setValue(5);
     m_incrementSecondsSpin->setRange(0, 60);
     m_incrementSecondsSpin->setValue(5);
+    m_gameModeCombo->addItems({"双人对战", "人机对战"});
+    m_gameModeCombo->setObjectName("gameModeCombo");
+    m_aiDepthSpin->setRange(1, 3);
+    m_aiDepthSpin->setValue(3);
+    m_aiDepthSpin->setEnabled(false);
+    m_aiDepthSpin->setObjectName("aiDepthSpin");
     m_guessingPlayerCombo->addItems({"玩家一", "玩家二"});
     m_oddButton->setChecked(true);
     m_resultLabel->setWordWrap(true);
@@ -41,6 +49,8 @@ GameSetupDialog::GameSetupDialog(QWidget* parent)
     settingsLayout->addRow("玩家二名称", m_playerTwoEdit);
     settingsLayout->addRow("总时长（分钟）", m_totalMinutesSpin);
     settingsLayout->addRow("每步奖励（秒）", m_incrementSecondsSpin);
+    settingsLayout->addRow("对局模式", m_gameModeCombo);
+    settingsLayout->addRow("AI 搜索深度", m_aiDepthSpin);
 
     auto* guessLayout = new QHBoxLayout;
     guessLayout->addWidget(m_guessingPlayerCombo);
@@ -60,6 +70,15 @@ GameSetupDialog::GameSetupDialog(QWidget* parent)
     connect(m_buttonBox->button(QDialogButtonBox::Ok), &QPushButton::clicked,
             this, [this] { handlePrimaryAction(); });
     connect(m_buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(m_gameModeCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const bool versusAi = index == 1;
+        m_aiDepthSpin->setEnabled(versusAi);
+        m_guessingPlayerCombo->setCurrentIndex(0);
+        m_guessingPlayerCombo->setEnabled(!versusAi);
+        if (versusAi && m_playerTwoEdit->text().trimmed() == "玩家二") {
+            m_playerTwoEdit->setText("AI");
+        }
+    });
 }
 
 void GameSetupDialog::handlePrimaryAction() {
@@ -84,6 +103,9 @@ void GameSetupDialog::handlePrimaryAction() {
     m_result.gotePlayerName = m_result.openingDraw.guessedCorrect ? other : guesser;
     m_result.totalSeconds = m_totalMinutesSpin->value() * 60;
     m_result.incrementSeconds = m_incrementSecondsSpin->value();
+    m_result.playAgainstAi = m_gameModeCombo->currentIndex() == 1;
+    m_result.aiIsSente = m_result.playAgainstAi && m_result.sentePlayerName == playerTwo;
+    m_result.aiDepth = m_aiDepthSpin->value();
 
     const QString parityText = guess == ParityGuess::Odd ? "奇数" : "偶数";
     const QString outcomeText = m_result.openingDraw.guessedCorrect ? "猜中" : "未猜中";
@@ -118,6 +140,8 @@ void GameSetupDialog::setSetupControlsEnabled(bool enabled) {
     m_playerTwoEdit->setEnabled(enabled);
     m_totalMinutesSpin->setEnabled(enabled);
     m_incrementSecondsSpin->setEnabled(enabled);
+    m_gameModeCombo->setEnabled(enabled);
+    m_aiDepthSpin->setEnabled(enabled && m_gameModeCombo->currentIndex() == 1);
     m_guessingPlayerCombo->setEnabled(enabled);
     m_oddButton->setEnabled(enabled);
     m_evenButton->setEnabled(enabled);
