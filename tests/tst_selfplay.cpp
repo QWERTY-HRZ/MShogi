@@ -66,7 +66,9 @@ TEST(SelfPlayTest, WritesDeterministicCompressedTrainingRecords) {
     EXPECT_GT(firstSummary.positions, 0u);
     EXPECT_EQ(firstSummary.positions, secondSummary.positions);
     EXPECT_EQ(firstContent, secondContent);
-    EXPECT_NE(firstContent.find("\"rule_version\":\"v1.10.0\""), std::string::npos);
+    EXPECT_NE(firstContent.find("\"format_version\":2"), std::string::npos);
+    EXPECT_NE(firstContent.find("\"rule_version\":\"v1.11.0\""), std::string::npos);
+    EXPECT_NE(firstContent.find("|repetition="), std::string::npos);
     EXPECT_NE(firstContent.find("\"core_commit\":\"test-commit\""), std::string::npos);
     EXPECT_NE(firstContent.find("\"legal_actions\":"), std::string::npos);
     EXPECT_NE(firstContent.find("\"selected_action\":"), std::string::npos);

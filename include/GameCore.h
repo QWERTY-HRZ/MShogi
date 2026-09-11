@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -10,7 +11,8 @@ enum class CoreEndReason {
     None,
     KingCaptured,
     BaselineEntry,
-    NoLegalAction
+    NoLegalAction,
+    RepetitionDraw
 };
 
 struct CoreMoveResult {
@@ -44,6 +46,7 @@ public:
     int winner() const { return m_winner; }
     CoreEndReason endReason() const { return m_endReason; }
     std::size_t plyCount() const { return m_history.size(); }
+    int currentPositionOccurrences() const;
 
     bool isKingThreatened(Player player) const;
     std::string serializeState() const;
@@ -65,4 +68,7 @@ private:
     int m_winner = 0;
     CoreEndReason m_endReason = CoreEndReason::None;
     std::vector<Snapshot> m_history;
+    std::map<std::string, int> m_positionOccurrences;
+
+    std::string positionKey() const;
 };

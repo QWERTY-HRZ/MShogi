@@ -20,6 +20,7 @@ struct SelfPlaySummary {
     std::uint64_t positions = 0;
     int senteWins = 0;
     int goteWins = 0;
+    int draws = 0;
     int truncatedGames = 0;
 };
 

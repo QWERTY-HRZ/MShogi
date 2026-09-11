@@ -111,6 +111,8 @@ bool GameEngine::makeMove(const Move& move) {
             reason = GameEndReason::KingCaptured;
         } else if (coreResult.endReason == CoreEndReason::BaselineEntry) {
             reason = GameEndReason::BaselineEntry;
+        } else if (coreResult.endReason == CoreEndReason::RepetitionDraw) {
+            reason = GameEndReason::RepetitionDraw;
         }
         finishGame(coreResult.winner, reason);
         return true;

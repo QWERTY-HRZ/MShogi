@@ -61,7 +61,8 @@ TEST_F(GameIntegrationTest, CaptureCooldownDropAndUndoPreserveExactHandState) {
     EXPECT_EQ(game.getCurrentPlayer(), Player::Sente);
     EXPECT_EQ(game.getBoard().getPiece(1, 4), nullptr);
     ASSERT_EQ(game.getBoard().getHand(Player::Sente).size(), 1u);
-    EXPECT_GT(game.getBoard().getHand(Player::Sente).front()->getTurnsInHand(), 3);
+    EXPECT_EQ(game.getBoard().getHand(Player::Sente).front()->getTurnsInHand(),
+              Piece::HAND_READY_TURNS);
 
     game.undo();
     game.undo();
@@ -107,6 +108,32 @@ TEST_F(GameIntegrationTest, PromotionCaptureNotationAndEndUndoAreConsistent) {
     EXPECT_EQ(game.getBoard().getPiece(2, 1)->getType(), PieceType::Pawn);
     EXPECT_EQ(game.getBoard().getPiece(2, 0)->getType(), PieceType::King);
     EXPECT_EQ(game.getBoard().getPiece(2, 0)->getOwner(), Player::Gote);
+}
+
+TEST_F(GameIntegrationTest, ThreefoldRepetitionEndsAsDrawAndCanBeUndone) {
+    int result = -1;
+    std::optional<GameEndReason> endReason;
+    QObject::connect(&game, &GameEngine::gameEnded,
+                     [&result, &endReason](int value, GameEndReason reason) {
+                         result = value;
+                         endReason = reason;
+                     });
+
+    for (int cycle = 0; cycle < 2; ++cycle) {
+        ASSERT_TRUE(game.makeMove(Move::makeMove(2, 5, 1, 5, Player::Sente)));
+        ASSERT_TRUE(game.makeMove(Move::makeMove(2, 0, 1, 0, Player::Gote)));
+        ASSERT_TRUE(game.makeMove(Move::makeMove(1, 5, 2, 5, Player::Sente)));
+        ASSERT_TRUE(game.makeMove(Move::makeMove(1, 0, 2, 0, Player::Gote)));
+    }
+
+    EXPECT_EQ(game.getCurrentState(), GameState::End);
+    EXPECT_EQ(result, 0);
+    ASSERT_TRUE(endReason.has_value());
+    EXPECT_EQ(*endReason, GameEndReason::RepetitionDraw);
+
+    game.undo();
+    EXPECT_EQ(game.getCurrentState(), GameState::Playing);
+    EXPECT_EQ(game.getCurrentPlayer(), Player::Gote);
 }
 
 TEST_F(GameIntegrationTest, UndoRestoresClockSnapshot) {

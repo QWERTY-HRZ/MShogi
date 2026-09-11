@@ -116,15 +116,19 @@ void Board::setKingInBaseFlag(Player p, bool val) {
 }
 
 void Board::addToHand(std::shared_ptr<Piece> piece) {
-    // 存入手驹
-    if (piece) m_hands[piece->getOwner()].push_back(piece);
+    if (!piece) return;
+    // 默认棋子进入手驹区时规范为已解禁；吃子生成的 1 状态保持不变。
+    if (piece->getTurnsInHand() == 0) {
+        piece->setTurnsInHand(Piece::HAND_READY_TURNS);
+    }
+    m_hands[piece->getOwner()].push_back(piece);
 }
 
 bool Board::isDroppable(const std::shared_ptr<Piece>& piece) {
     if (!piece) return false;
     const int turns = piece->getTurnsInHand();
-    // 1~3 表示刚被吃后至下一次己方回合结束前的禁手期。
-    return turns == 0 || turns > 3;
+    // 1~3 为禁手期，4 是唯一的已解禁手驹状态。
+    return turns == Piece::HAND_READY_TURNS;
 }
 
 std::shared_ptr<Piece> Board::takeFromHand(Player p, PieceType type) {
@@ -165,14 +169,11 @@ const std::vector<std::shared_ptr<Piece>>& Board::getHand(Player p) const {
     return (it != m_hands.end()) ? it->second : empty;
 }
 
-void Board::updateHandTurns(int delta) {
-    // 批量增加手驹区回合数
+void Board::advanceHandTurns() {
+    // 每步只推进到解禁态，悔棋由 GameCore 快照精确恢复。
     for (auto& kv : m_hands) {
         for (std::shared_ptr<Piece> p : kv.second) {
-            // p 是 piece 的指针
-            if (delta > 0) p->incrementTurnsInHand();
-            // 撤回时 重置回合数
-            else p->decrementTurnsInHand();
+            p->advanceTurnInHand();
         }
     }
 }

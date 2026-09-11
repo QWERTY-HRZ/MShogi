@@ -44,3 +44,18 @@ TEST(GameAgentTest, BaselineFindsImmediateKingCapture) {
     EXPECT_EQ(selected->toX, 2);
     EXPECT_EQ(selected->toY, 0);
 }
+
+TEST(GameAgentTest, DrawHasNeutralValueForBothPlayers) {
+    GameCore core;
+    for (int cycle = 0; cycle < 2; ++cycle) {
+        ASSERT_TRUE(core.applyAction(Move::makeMove(2, 5, 1, 5, Player::Sente)));
+        ASSERT_TRUE(core.applyAction(Move::makeMove(2, 0, 1, 0, Player::Gote)));
+        ASSERT_TRUE(core.applyAction(Move::makeMove(1, 5, 2, 5, Player::Sente)));
+        ASSERT_TRUE(core.applyAction(Move::makeMove(1, 0, 2, 0, Player::Gote)));
+    }
+
+    ASSERT_TRUE(core.isTerminal());
+    AlphaBetaAgent agent(1);
+    EXPECT_DOUBLE_EQ(agent.evaluate(core, Player::Sente), 0.0);
+    EXPECT_DOUBLE_EQ(agent.evaluate(core, Player::Gote), 0.0);
+}

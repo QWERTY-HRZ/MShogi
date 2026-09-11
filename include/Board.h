@@ -35,8 +35,7 @@ public:
     bool removeFromHand(const std::shared_ptr<Piece>& piece);
     bool hasDroppablePiece(Player p, PieceType type) const;
     const std::vector<std::shared_ptr<Piece>>& getHand(Player p) const;
-    // 正数推进禁手回合，负数用于悔棋回退。
-    void updateHandTurns(int delta);
+    void advanceHandTurns();
 
     static constexpr int ROWS = GameConstants::ROWS;
     static constexpr int COLS = GameConstants::COLS;

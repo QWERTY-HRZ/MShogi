@@ -104,6 +104,8 @@ double AlphaBetaAgent::search(const GameCore& core, int depth,
 
 double AlphaBetaAgent::evaluate(const GameCore& core, Player perspective) const {
     if (core.isTerminal()) {
+        // 和棋对双方价值均为 0，不能按失败的极值处理。
+        if (core.winner() == 0) return 0.0;
         return core.winner() == winnerFor(perspective) ? 100000.0 : -100000.0;
     }
 

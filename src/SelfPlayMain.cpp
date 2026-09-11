@@ -53,6 +53,7 @@ int main(int argc, char* argv[]) {
                   << " positions=" << summary.positions
                   << " sente_wins=" << summary.senteWins
                   << " gote_wins=" << summary.goteWins
+                  << " draws=" << summary.draws
                   << " truncated=" << summary.truncatedGames
                   << " output=" << config.outputPath << '\n';
         return 0;

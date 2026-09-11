@@ -26,6 +26,7 @@ GameCore::GameCore() {
 void GameCore::reset() {
     m_board.clear();
     m_history.clear();
+    m_positionOccurrences.clear();
     m_currentPlayer = Player::Sente;
     m_terminal = false;
     m_winner = 0;
@@ -46,6 +47,9 @@ void GameCore::reset() {
     m_board.placePiece(0, goteY + 1, makePiece(PieceType::Pawn, Player::Gote));
     m_board.placePiece(2, goteY + 1, makePiece(PieceType::Pawn, Player::Gote));
     m_board.placePiece(4, goteY + 1, makePiece(PieceType::Pawn, Player::Gote));
+
+    // 初始局面计作第一次出现，第三次轮到同一方时立即和棋。
+    m_positionOccurrences[positionKey()] = 1;
 }
 
 bool GameCore::isLegalAction(const Move& move) const {
@@ -95,12 +99,14 @@ bool GameCore::applyAction(const Move& move, CoreMoveResult* result) {
         }
     }
 
-    m_board.updateHandTurns(1);
+    m_board.advanceHandTurns();
     m_history.push_back(std::move(snapshot));
     m_currentPlayer = opponent(move.player);
     localResult.accepted = true;
 
     const int boardWinner = m_ruleEngine.isGameOver(m_board);
+    // 下底检测可能更新标记，必须在标记稳定后登记重复局面。
+    const int positionOccurrences = ++m_positionOccurrences[positionKey()];
     if (boardWinner != 0) {
         m_terminal = true;
         m_winner = boardWinner;
@@ -111,6 +117,11 @@ bool GameCore::applyAction(const Move& move, CoreMoveResult* result) {
         m_terminal = true;
         m_winner = move.player == Player::Sente ? 1 : 2;
         m_endReason = CoreEndReason::NoLegalAction;
+    } else if (positionOccurrences >= 3) {
+        // 决胜条件优先；仅未分胜负的第三次相同局面判和。
+        m_terminal = true;
+        m_winner = 0;
+        m_endReason = CoreEndReason::RepetitionDraw;
     }
 
     localResult.terminal = m_terminal;
@@ -124,6 +135,11 @@ bool GameCore::applyAction(const Move& move, CoreMoveResult* result) {
 
 bool GameCore::undoAction() {
     if (m_history.empty()) return false;
+    const std::string currentKey = positionKey();
+    auto occurrence = m_positionOccurrences.find(currentKey);
+    if (occurrence != m_positionOccurrences.end() && --occurrence->second == 0) {
+        m_positionOccurrences.erase(occurrence);
+    }
     Snapshot snapshot = std::move(m_history.back());
     m_history.pop_back();
     m_board = std::move(snapshot.board);
@@ -182,9 +198,9 @@ bool GameCore::isKingThreatened(Player player) const {
     return m_ruleEngine.isKingThreatened(m_board, player);
 }
 
-std::string GameCore::serializeState() const {
+std::string GameCore::positionKey() const {
     std::ostringstream output;
-    output << "v1.10.0|turn=" << (m_currentPlayer == Player::Sente ? 'S' : 'G');
+    output << "turn=" << (m_currentPlayer == Player::Sente ? 'S' : 'G');
     output << "|board=";
     for (int y = 0; y < GameConstants::ROWS; ++y) {
         for (int x = 0; x < GameConstants::COLS; ++x) {
@@ -210,7 +226,19 @@ std::string GameCore::serializeState() const {
     }
 
     output << "|flags=" << m_board.getKingInBaseFlag(Player::Sente)
-           << m_board.getKingInBaseFlag(Player::Gote)
+           << m_board.getKingInBaseFlag(Player::Gote);
+    return output.str();
+}
+
+int GameCore::currentPositionOccurrences() const {
+    const auto occurrence = m_positionOccurrences.find(positionKey());
+    return occurrence == m_positionOccurrences.end() ? 0 : occurrence->second;
+}
+
+std::string GameCore::serializeState() const {
+    std::ostringstream output;
+    output << GameConstants::RULE_VERSION << '|' << positionKey()
+           << "|repetition=" << currentPositionOccurrences()
            << "|terminal=" << m_terminal << "|winner=" << m_winner;
     return output.str();
 }
@@ -223,5 +251,7 @@ GameCore GameCore::fork() const {
     copy.m_terminal = m_terminal;
     copy.m_winner = m_winner;
     copy.m_endReason = m_endReason;
+    // 搜索分支需继承重复历史，否则无法识别分支内的第三次局面。
+    copy.m_positionOccurrences = m_positionOccurrences;
     return copy;
 }

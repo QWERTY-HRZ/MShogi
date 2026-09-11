@@ -10,10 +10,10 @@ MShogi 是一款使用 C++17 与 Qt 6 开发的双人桌面棋类游戏。它采
 - 整合式开局设置与奇偶猜先，可设置玩家名称、棋钟和每步奖励。
 - 支持双人和人机模式；内置后台运行的 Alpha-Beta 基线 AI，可选择搜索深度。
 - 车的长距离空格移动与纵向两格突击、相的隔子吃子、兵到底线升变为侯。
-- 手驹按具体棋子记录禁手回合，支持合法位置提示与拖拽打入。
+- 手驹按具体棋子记录有限禁手状态，支持合法位置提示与拖拽打入。
 - 棋谱、悔棋、重开、认输、暂停与继续。
 - 双方棋钟、每步奖励时间、总对局用时与超时判负。
-- 支持吃王、下底、无合法着法、超时和认输等明确结束原因。
+- 支持吃王、下底、无合法着法、三次重复和棋、超时和认输等明确结束原因。
 - Qt Graphics View 可缩放界面、QSS、图标与音效资源。
 - Google Test 覆盖棋盘、规则、引擎及 UI 拖拽。
 
@@ -66,13 +66,13 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
 
 `mshogi_selfplay` 生成可重放的 gzip 压缩 JSONL：
 
-    ./Src/Build/MinGW_13_1_0-Release/src/mshogi_selfplay.exe --games 100 --output ./Dataset/AI/v1.10.0/selfplay/train_0001.jsonl.gz --seed 20260910 --depth 2 --temperature 1.0 --temperature-plies 12 --max-plies 120
+    ./Src/Build/MinGW_13_1_0-Release/src/mshogi_selfplay.exe --games 100 --output ./Dataset/AI/v1.11.0/selfplay/train_0001.jsonl.gz --seed 20260911 --depth 2 --temperature 1.0 --temperature-plies 12 --max-plies 120
 
 使用 `MShogi` Conda 环境校验数据：
 
-    conda run -n MShogi python ./Src/Mixed-Shogi/tools/inspect_selfplay.py ./Dataset/AI/v1.10.0/selfplay/train_0001.jsonl.gz
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/inspect_selfplay.py ./Dataset/AI/v1.11.0/selfplay/train_0001.jsonl.gz
 
-相同规则版本、提交、参数和随机种子会生成相同记录。达到 `max-plies` 的对局标记为截断，`winner` 和局面 `outcome` 为 0，不会伪装成规则和棋。
+相同规则版本、提交、参数和随机种子会生成相同记录。三次重复是正式和棋，记录为 `threefold_repetition`；达到 `max-plies` 的对局仅标记为 `ply_limit` 截断，两者分别统计。
 
 ## 许可证
 

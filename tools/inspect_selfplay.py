@@ -12,6 +12,8 @@ def inspect(path: Path) -> dict[str, object]:
     winners: Counter[int] = Counter()
     metadata: dict[str, object] | None = None
     game_ids: set[int] = set()
+    draws = 0
+    truncated_games = 0
 
     with gzip.open(path, "rt", encoding="utf-8") as stream:
         for line_number, line in enumerate(stream, start=1):
@@ -23,13 +25,19 @@ def inspect(path: Path) -> dict[str, object]:
                 if record_type != "metadata":
                     raise ValueError("first record must be metadata")
                 metadata = record
-                if record.get("rule_version") != "v1.10.0":
-                    raise ValueError("unexpected rule version")
+                version_pair = (int(record.get("format_version", -1)), record.get("rule_version"))
+                if version_pair not in {(1, "v1.10.0"), (2, "v1.11.0")}:
+                    raise ValueError("unsupported format/rule version pair")
                 if int(record.get("action_count", -1)) != 990:
                     raise ValueError("unexpected action count")
                 continue
 
             if record_type == "position":
+                state = str(record.get("state", ""))
+                if not state.startswith(f"{metadata['rule_version']}|"):
+                    raise ValueError(f"state/rule version mismatch at line {line_number}")
+                if int(metadata["format_version"]) >= 2 and "|repetition=" not in state:
+                    raise ValueError(f"repetition state is missing at line {line_number}")
                 legal_actions = record.get("legal_actions", [])
                 legal_ids = {int(action[0]) for action in legal_actions}
                 if not legal_ids or any(action_id < 0 or action_id >= 990 for action_id in legal_ids):
@@ -45,6 +53,21 @@ def inspect(path: Path) -> dict[str, object]:
                 winner = int(record["winner"])
                 if winner not in (0, 1, 2):
                     raise ValueError(f"invalid winner at line {line_number}")
+                truncated = bool(record.get("truncated"))
+                end_reason = record.get("end_reason")
+                decisive_reasons = {"king_captured", "baseline_entry", "no_legal_action"}
+                if truncated:
+                    if winner != 0 or end_reason != "ply_limit":
+                        raise ValueError(f"invalid truncated result at line {line_number}")
+                    truncated_games += 1
+                elif end_reason == "threefold_repetition":
+                    if winner != 0:
+                        raise ValueError(f"repetition draw has a winner at line {line_number}")
+                    draws += 1
+                elif winner == 0:
+                    raise ValueError(f"non-truncated zero-winner game is not a draw at line {line_number}")
+                elif end_reason not in decisive_reasons:
+                    raise ValueError(f"winner has invalid end reason at line {line_number}")
                 winners[winner] += 1
                 game_ids.add(int(record["game_id"]))
             else:
@@ -58,6 +81,7 @@ def inspect(path: Path) -> dict[str, object]:
     return {
         "path": str(path.resolve()),
         "compressed_bytes": path.stat().st_size,
+        "format_version": metadata["format_version"],
         "rule_version": metadata["rule_version"],
         "core_commit": metadata["core_commit"],
         "seed": metadata["seed"],
@@ -65,7 +89,8 @@ def inspect(path: Path) -> dict[str, object]:
         "positions": counts["position"],
         "sente_wins": winners[1],
         "gote_wins": winners[2],
-        "draw_or_truncated": winners[0],
+        "draws": draws,
+        "truncated": truncated_games,
         "unique_game_ids": len(game_ids),
     }
 

@@ -245,6 +245,10 @@ void UIController::onMoveExecuted(const std::string& notation) {
 }
 
 void UIController::onGameEnded(int result, GameEndReason reason) {
+    if (reason == GameEndReason::RepetitionDraw) {
+        QMessageBox::information(this, "对局结束", "本局和棋！\n\n结束原因：三次重复局面");
+        return;
+    }
     const QString winnerRole = result == 1 ? "先手" : "后手";
     const QString winnerName = result == 1 ? m_sentePlayerName : m_gotePlayerName;
     QString reasonText;
@@ -252,6 +256,7 @@ void UIController::onGameEnded(int result, GameEndReason reason) {
         case GameEndReason::KingCaptured: reasonText = "实际吃掉对方王"; break;
         case GameEndReason::BaselineEntry: reasonText = "王下底后存活一回合"; break;
         case GameEndReason::NoLegalAction: reasonText = "对方无合法着法"; break;
+        case GameEndReason::RepetitionDraw: break;
         case GameEndReason::Timeout: reasonText = "对方棋钟归零"; break;
         case GameEndReason::Resignation: reasonText = "对方认输"; break;
     }

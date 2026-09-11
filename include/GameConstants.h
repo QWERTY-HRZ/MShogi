@@ -1,6 +1,8 @@
 ﻿#pragma once
 
 namespace GameConstants {
+    static constexpr const char* RULE_VERSION = "v1.11.0";
+
     // 棋盘行/列
     static constexpr int COLS = 5;
     static constexpr int ROWS = 6;

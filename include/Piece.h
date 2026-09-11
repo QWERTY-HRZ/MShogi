@@ -17,16 +17,21 @@ enum class PieceType {
 
 class Piece {
 public:
+    static constexpr int HAND_READY_TURNS = 4;
+
     Piece(Player owner, PieceType type) : m_owner(owner), m_type(type) {}
     virtual ~Piece() = default;
 
     Player getOwner() const { return m_owner; }
     PieceType getType() const { return m_type; }
     virtual std::string getName() const = 0;
-    // 手驹管理
-    void setTurnsInHand(int v) { m_turnsInHand = v; }
-    void incrementTurnsInHand() { m_turnsInHand++; }
-    void decrementTurnsInHand() { if (m_turnsInHand > 0) m_turnsInHand--; } // Undo用
+    // 禁手状态封顶为 4，避免已解禁手驹产生无限多个等价状态。
+    void setTurnsInHand(int v) {
+        m_turnsInHand = v < 0 ? 0 : (v > HAND_READY_TURNS ? HAND_READY_TURNS : v);
+    }
+    void advanceTurnInHand() {
+        if (m_turnsInHand < HAND_READY_TURNS) ++m_turnsInHand;
+    }
     int getTurnsInHand() const { return m_turnsInHand; }
 
 protected:

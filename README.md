@@ -10,10 +10,10 @@ MShogi is a two-player desktop board game written in C++17 and Qt 6. It uses a 5
 - Integrated match setup and odd/even opening draw for player names and clocks.
 - Local human-versus-human and human-versus-AI modes with a background Alpha-Beta baseline agent.
 - Long non-capturing rook moves, two-square vertical rook assaults, screened bishop captures, and mandatory pawn promotion.
-- Per-piece hand cooldowns, legal-move highlighting, and drag-and-drop placement.
+- Canonical per-piece hand cooldown states, legal-move highlighting, and drag-and-drop placement.
 - Notation, undo, restart, resignation, pause, and resume controls.
 - Per-player clocks, move increments, elapsed match time, and timeout losses.
-- Explicit end reasons for king capture, baseline entry, no legal action, timeout, and resignation.
+- Explicit end reasons for king capture, baseline entry, no legal action, threefold-repetition draws, timeout, and resignation.
 - A scalable Qt Graphics View interface with QSS, icons, and sound resources.
 - Google Test coverage for the board, rules, engine, and UI dragging.
 
@@ -64,13 +64,13 @@ Training or self-play hosts can build the headless core without Qt:
 
 `mshogi_selfplay` writes replayable gzip-compressed JSONL shards:
 
-    ./Src/Build/MinGW_13_1_0-Release/src/mshogi_selfplay.exe --games 100 --output ./Dataset/AI/v1.10.0/selfplay/train_0001.jsonl.gz --seed 20260910 --depth 2 --temperature 1.0 --temperature-plies 12 --max-plies 120
+    ./Src/Build/MinGW_13_1_0-Release/src/mshogi_selfplay.exe --games 100 --output ./Dataset/AI/v1.11.0/selfplay/train_0001.jsonl.gz --seed 20260911 --depth 2 --temperature 1.0 --temperature-plies 12 --max-plies 120
 
 Validate a shard with the `MShogi` Conda environment:
 
-    conda run -n MShogi python ./Src/Mixed-Shogi/tools/inspect_selfplay.py ./Dataset/AI/v1.10.0/selfplay/train_0001.jsonl.gz
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/inspect_selfplay.py ./Dataset/AI/v1.11.0/selfplay/train_0001.jsonl.gz
 
-The same rules, commit, arguments, and seed produce the same records. Games reaching `max-plies` are marked as truncated with zero winner/outcomes; they are not presented as rules-level draws.
+The same rules, commit, arguments, and seed produce the same records. Threefold repetition is a rules-level draw recorded as `threefold_repetition`; games reaching `max-plies` are separately recorded as `ply_limit` truncations.
 
 ## License
 

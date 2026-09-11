@@ -22,6 +22,7 @@ enum class GameEndReason {
     KingCaptured,
     BaselineEntry,
     NoLegalAction,
+    RepetitionDraw,
     Timeout,
     Resignation
 };

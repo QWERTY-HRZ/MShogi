@@ -60,6 +60,7 @@ const char* endReasonName(CoreEndReason reason, bool truncated) {
         case CoreEndReason::KingCaptured: return "king_captured";
         case CoreEndReason::BaselineEntry: return "baseline_entry";
         case CoreEndReason::NoLegalAction: return "no_legal_action";
+        case CoreEndReason::RepetitionDraw: return "threefold_repetition";
         case CoreEndReason::None: return "none";
     }
     return "none";
@@ -147,7 +148,8 @@ SelfPlaySummary SelfPlayRunner::run(const SelfPlayConfig& config) {
     metadata.imbue(std::locale::classic());
     metadata << "{\"record_type\":\"metadata\","
              << "\"format\":\"mshogi-selfplay-jsonl-gzip\","
-             << "\"format_version\":1,\"rule_version\":\"v1.10.0\","
+             << "\"format_version\":2,\"rule_version\":\""
+             << GameConstants::RULE_VERSION << "\","
              << "\"action_count\":990,\"action_encoding\":\"from30+to/drop\","
              << "\"core_commit\":\"" << config.coreCommit << "\","
              << "\"seed\":" << config.seed << ",\"games\":" << config.games
@@ -198,6 +200,9 @@ SelfPlaySummary SelfPlayRunner::run(const SelfPlayConfig& config) {
         summary.positions += records.size();
         if (winner == 1) ++summary.senteWins;
         else if (winner == 2) ++summary.goteWins;
+        else if (!truncated && core.endReason() == CoreEndReason::RepetitionDraw) {
+            ++summary.draws;
+        }
         if (truncated) ++summary.truncatedGames;
     }
     return summary;

@@ -42,11 +42,11 @@ TEST_F(BoardTest, HandSelectionUsesEligiblePieceIdentity) {
     auto forbiddenPawn = std::make_shared<Pawn>(Player::Sente);
     forbiddenPawn->setTurnsInHand(3);
     auto availablePawn = std::make_shared<Pawn>(Player::Sente);
-    availablePawn->setTurnsInHand(4);
 
     board.addToHand(forbiddenPawn);
     board.addToHand(availablePawn);
 
+    EXPECT_EQ(availablePawn->getTurnsInHand(), Piece::HAND_READY_TURNS);
     EXPECT_TRUE(board.hasDroppablePiece(Player::Sente, PieceType::Pawn));
     EXPECT_EQ(board.takeFromHand(Player::Sente, PieceType::Pawn), availablePawn);
     EXPECT_FALSE(board.hasDroppablePiece(Player::Sente, PieceType::Pawn));
@@ -54,13 +54,20 @@ TEST_F(BoardTest, HandSelectionUsesEligiblePieceIdentity) {
     EXPECT_EQ(board.getHand(Player::Sente).front(), forbiddenPawn);
 }
 
-TEST_F(BoardTest, HandTurnUpdatesAreReversible) {
+TEST_F(BoardTest, HandTurnUpdatesStopAtCanonicalReadyState) {
     auto pawn = std::make_shared<Pawn>(Player::Gote);
     pawn->setTurnsInHand(2);
     board.addToHand(pawn);
 
-    board.updateHandTurns(1);
+    board.advanceHandTurns();
     EXPECT_EQ(pawn->getTurnsInHand(), 3);
-    board.updateHandTurns(-1);
-    EXPECT_EQ(pawn->getTurnsInHand(), 2);
+    board.advanceHandTurns();
+    EXPECT_EQ(pawn->getTurnsInHand(), Piece::HAND_READY_TURNS);
+    board.advanceHandTurns();
+    EXPECT_EQ(pawn->getTurnsInHand(), Piece::HAND_READY_TURNS);
+
+    pawn->setTurnsInHand(100);
+    EXPECT_EQ(pawn->getTurnsInHand(), Piece::HAND_READY_TURNS);
+    pawn->setTurnsInHand(-1);
+    EXPECT_EQ(pawn->getTurnsInHand(), 0);
 }
