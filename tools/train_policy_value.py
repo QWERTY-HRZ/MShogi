@@ -187,6 +187,10 @@ def main() -> int:
 
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    checkpoint_directory = output / "checkpoints"
+    report_directory = output / "reports"
+    checkpoint_directory.mkdir(exist_ok=True)
+    report_directory.mkdir(exist_ok=True)
     manifest = {
         "rule_version": RULE_VERSION,
         "training_commit": source_commit,
@@ -209,13 +213,13 @@ def main() -> int:
         ],
         "arguments": vars(args) | {"output": str(output)},
     }
-    (output / "run_config.json").write_text(
+    (report_directory / "run_config.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
     )
 
     history: list[dict[str, object]] = []
     best_loss = float("inf")
-    best_path = output / "best.pt"
+    best_path = checkpoint_directory / "best.pt"
     writer = SummaryWriter(log_dir=str(output / "tensorboard"))
     started = time.perf_counter()
     for epoch in range(1, args.epochs + 1):
@@ -258,7 +262,7 @@ def main() -> int:
         "model_state": model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
         "epoch": args.epochs,
-    }, output / "last.pt")
+    }, checkpoint_directory / "last.pt")
     checkpoint = torch.load(best_path, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint["model_state"])
     test_metrics = run_loader(model, loaders["test"], device, None, args.value_weight)
@@ -271,10 +275,10 @@ def main() -> int:
         "best_sha256": sha256_file(best_path),
     }
     writer.close()
-    (output / "history.json").write_text(
+    (report_directory / "history.json").write_text(
         json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    (output / "summary.json").write_text(
+    (report_directory / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))

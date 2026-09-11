@@ -82,7 +82,7 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
 
     conda run -n MShogi python ./Src/Mixed-Shogi/tools/train_policy_value.py --data "./Dataset/AI/v1.11.0/selfplay/*.jsonl.gz" --output ./Dataset/AI/v1.11.0/models/supervised_1k --epochs 5 --batch-size 256 --device cpu
 
-脚本按整局确定性划分训练/验证/测试集，训练集追加 180 度旋转换手副本。截断局面不参与价值损失，运行目录保存配置、数据哈希、TensorBoard 日志、最佳/最终检查点和测试指标。
+脚本按整局确定性划分训练/验证/测试集，训练集追加 180 度旋转换手副本。截断局面不参与价值损失；运行目录的 `checkpoints/` 单独保存模型文件，`reports/` 保存配置和指标，`tensorboard/` 保存训练日志。
 
 ## 许可证
 

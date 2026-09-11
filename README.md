@@ -80,7 +80,7 @@ Train the supervised policy-value baseline with ten board planes, hand/cooldown 
 
     conda run -n MShogi python ./Src/Mixed-Shogi/tools/train_policy_value.py --data "./Dataset/AI/v1.11.0/selfplay/*.jsonl.gz" --output ./Dataset/AI/v1.11.0/models/supervised_1k --epochs 5 --batch-size 256 --device cpu
 
-Games are deterministically split between training, validation, and test sets. Training adds a 180-degree rotated, player-swapped copy; truncated positions are excluded from value loss. Each run stores its configuration, shard hashes, TensorBoard logs, best/final checkpoints, and test metrics.
+Games are deterministically split between training, validation, and test sets. Training adds a 180-degree rotated, player-swapped copy; truncated positions are excluded from value loss. Each run keeps model files under `checkpoints/`, metrics and configuration under `reports/`, and event logs under `tensorboard/`.
 
 ## License
 
