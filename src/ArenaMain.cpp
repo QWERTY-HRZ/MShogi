@@ -137,7 +137,11 @@ int main(int argc, char* argv[]) {
             neuralSente.pairId = neuralGote.pairId = pairId;
             applyOpening(neuralSente, neuralGote, config.openingPlies,
                          config.seed, pairId);
+            // 每对棋局共享同一开局，协议记录用于验证换先公平性与开局多样性。
+            std::cout << "O\t" << pairId << '\t'
+                      << neuralSente.core.serializeState() << '\n';
         }
+        std::cout.flush();
 
         AlphaBetaAgent alphaBeta(config.alphaBetaDepth);
         while (true) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import subprocess
@@ -75,6 +76,7 @@ def main() -> int:
     inference_batches = 0
     batch_sizes: list[int] = []
     arena_commit = "unknown"
+    opening_hashes: dict[int, str] = {}
     started = time.perf_counter()
     while True:
         line = process.stdout.readline()
@@ -86,6 +88,14 @@ def main() -> int:
             if len(fields) != 3 or fields[2] != manifest["rule_version"]:
                 raise RuntimeError("arena metadata is incompatible with the model")
             arena_commit = fields[1]
+            continue
+        if fields[0] == "O":
+            if len(fields) != 3:
+                raise RuntimeError("invalid paired opening record")
+            pair_id = int(fields[1])
+            opening_hashes[pair_id] = hashlib.sha256(
+                fields[2].encode("utf-8")
+            ).hexdigest().upper()
             continue
         if fields[0] == "R":
             result = {
@@ -100,6 +110,7 @@ def main() -> int:
                 "draw" if winner == 0 else
                 "win" if (winner == 1) == (result["neural_side"] == "S") else "loss"
             )
+            result["opening_sha256"] = opening_hashes.get(int(result["pair_id"]), "")
             results.append(result)
             continue
         if fields[0] == "B":
@@ -165,6 +176,16 @@ def main() -> int:
     }
     decisive = counts["win"] + counts["loss"]
     completed = args.games - counts["truncated"]
+    pair_scores: Counter[str] = Counter()
+    for pair_id in range(args.games // 2):
+        pair_games = [result for result in results if result["pair_id"] == pair_id]
+        if len(pair_games) != 2 or any(result["truncated"] for result in pair_games):
+            pair_scores["incomplete"] += 1
+            continue
+        points = sum(1.0 if result["neural_result"] == "win" else
+                     0.5 if result["neural_result"] == "draw" else 0.0
+                     for result in pair_games)
+        pair_scores[f"{points:.1f}"] += 1
     summary = {
         "model": str(model_path), "model_sha256": manifest["onnx_sha256"],
         "rule_version": manifest["rule_version"], "provider": "CPUExecutionProvider",
@@ -179,6 +200,9 @@ def main() -> int:
                    "decisive_win_rate": counts["win"] / decisive if decisive else 0.0,
                    "decisive_win_rate_wilson95": wilson_interval(counts["win"], decisive)},
         "by_side": {side: dict(counter) for side, counter in side_counts.items()},
+        "paired_score_points": dict(pair_scores),
+        "unique_openings": len(set(opening_hashes.values())),
+        "opening_pairs": len(opening_hashes),
         "end_reasons": dict(reasons),
         "average_plies": sum(int(result["plies"]) for result in results) / args.games,
         "truncated": sum(bool(result["truncated"]) for result in results),
