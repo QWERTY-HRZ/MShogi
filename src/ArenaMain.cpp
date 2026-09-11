@@ -32,6 +32,24 @@ struct Config {
     std::uint64_t seed = 1;
 };
 
+struct NeuralResponse {
+    std::size_t gameIndex = 0;
+    std::optional<int> directAction;
+    std::vector<int> candidates;
+};
+
+std::vector<int> parseActionIds(const std::string& value) {
+    std::vector<int> actions;
+    std::size_t start = 0;
+    while (start < value.size()) {
+        const std::size_t separator = value.find(',', start);
+        actions.push_back(std::stoi(value.substr(start, separator - start)));
+        if (separator == std::string::npos) break;
+        start = separator + 1;
+    }
+    return actions;
+}
+
 std::string requireValue(int& index, int argc, char* argv[]) {
     if (++index >= argc) throw std::invalid_argument("missing option value");
     return argv[index];
@@ -205,20 +223,85 @@ int main(int argc, char* argv[]) {
             }
             std::cout.flush();
 
+            std::vector<NeuralResponse> neuralResponses;
+            neuralResponses.reserve(neuralGames.size());
             for (const std::size_t expectedIndex : neuralGames) {
                 std::string marker;
                 std::size_t gameIndex = 0;
-                int actionId = -1;
-                if (!(std::cin >> marker >> gameIndex >> actionId) || marker != "A" ||
-                    gameIndex != expectedIndex) {
+                std::string payload;
+                if (!(std::cin >> marker >> gameIndex >> payload) ||
+                    gameIndex != expectedIndex || (marker != "A" && marker != "Q")) {
                     throw std::runtime_error("invalid neural action response");
                 }
+                NeuralResponse response;
+                response.gameIndex = gameIndex;
+                if (marker == "A") response.directAction = std::stoi(payload);
+                else response.candidates = parseActionIds(payload);
+
+                if (response.candidates.empty() && !response.directAction) {
+                    throw std::runtime_error("neural response has no action");
+                }
                 const Player player = games[gameIndex].core.currentPlayer();
-                const Move move = decodeAction(actionId, player);
-                if (!games[gameIndex].core.applyAction(move)) {
+                const auto validateAction = [&](int actionId) {
+                    return games[gameIndex].core.isLegalAction(
+                        decodeAction(actionId, player));
+                };
+                if (response.directAction && !validateAction(*response.directAction)) {
                     throw std::runtime_error("neural agent returned an illegal action");
                 }
-                ++games[gameIndex].plies;
+                for (const int actionId : response.candidates) {
+                    if (!validateAction(actionId)) {
+                        throw std::runtime_error("neural candidate is illegal");
+                    }
+                }
+                neuralResponses.push_back(std::move(response));
+            }
+
+            std::size_t candidateCount = 0;
+            for (const auto& response : neuralResponses) {
+                candidateCount += response.candidates.size();
+            }
+            if (candidateCount != 0) {
+                std::cout << "V\t" << candidateCount << '\n';
+                for (const auto& response : neuralResponses) {
+                    const Player mover = games[response.gameIndex].core.currentPlayer();
+                    for (const int actionId : response.candidates) {
+                        GameCore child = games[response.gameIndex].core.fork();
+                        if (!child.applyAction(decodeAction(actionId, mover))) {
+                            throw std::runtime_error("failed to expand neural candidate");
+                        }
+                        int exactValue = 2;
+                        if (child.isTerminal()) {
+                            exactValue = child.winner() == 0 ? 0
+                                : child.winner() == (mover == Player::Sente ? 1 : 2) ? 1 : -1;
+                        }
+                        // 立即终局使用精确值，非终局才发送子局面给价值头。
+                        std::cout << "C\t" << response.gameIndex << '\t' << actionId
+                                  << '\t' << exactValue << '\t'
+                                  << (exactValue == 2 ? child.serializeState() : "-") << '\n';
+                    }
+                }
+                std::cout.flush();
+            }
+
+            for (auto& response : neuralResponses) {
+                int actionId = response.directAction.value_or(-1);
+                if (!response.candidates.empty()) {
+                    std::string marker;
+                    std::size_t gameIndex = 0;
+                    if (!(std::cin >> marker >> gameIndex >> actionId) || marker != "A" ||
+                        gameIndex != response.gameIndex ||
+                        std::find(response.candidates.begin(), response.candidates.end(),
+                                  actionId) == response.candidates.end()) {
+                        throw std::runtime_error("invalid value-reranked action response");
+                    }
+                }
+                const Player player = games[response.gameIndex].core.currentPlayer();
+                if (!games[response.gameIndex].core.applyAction(
+                        decodeAction(actionId, player))) {
+                    throw std::runtime_error("neural agent returned an illegal final action");
+                }
+                ++games[response.gameIndex].plies;
             }
         }
 

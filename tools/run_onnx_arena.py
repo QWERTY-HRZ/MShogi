@@ -41,7 +41,14 @@ def main() -> int:
     parser.add_argument("--max-plies", type=int, default=200)
     parser.add_argument("--threads", type=int, default=16)
     parser.add_argument("--seed", type=int, default=20260912)
+    parser.add_argument("--top-k", type=int, default=1)
+    parser.add_argument("--policy-weight", type=float, default=1.0)
+    parser.add_argument("--value-weight", type=float, default=0.0)
     args = parser.parse_args()
+    if args.top_k <= 0 or args.policy_weight < 0.0 or args.value_weight < 0.0:
+        raise ValueError("top-k and reranking weights must be non-negative")
+    if args.policy_weight == 0.0 and args.value_weight == 0.0:
+        raise ValueError("at least one reranking weight must be positive")
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     if manifest["rule_version"] != "v1.11.0" or manifest["action_count"] != ACTION_COUNT:
@@ -77,6 +84,8 @@ def main() -> int:
     batch_sizes: list[int] = []
     arena_commit = "unknown"
     opening_hashes: dict[int, str] = {}
+    reranked_actions = 0
+    candidate_positions = 0
     started = time.perf_counter()
     while True:
         line = process.stdout.readline()
@@ -148,8 +157,83 @@ def main() -> int:
                 raise RuntimeError("ONNX returned an unexpected output shape")
             if not np.isfinite(policy_logits).all() or not np.isfinite(values).all():
                 raise RuntimeError("ONNX returned NaN or infinity")
+            if args.top_k == 1:
+                for row, (game_id, ids) in enumerate(zip(game_ids, legal_ids, strict=True)):
+                    action_id = int(ids[np.argmax(policy_logits[row, ids])])
+                    process.stdin.write(f"A\t{game_id}\t{action_id}\n")
+                process.stdin.flush()
+                continue
+
+            candidates_by_game: dict[int, np.ndarray] = {}
+            policy_row_by_game: dict[int, int] = {}
+            legal_by_game: dict[int, np.ndarray] = {}
             for row, (game_id, ids) in enumerate(zip(game_ids, legal_ids, strict=True)):
-                action_id = int(ids[np.argmax(policy_logits[row, ids])])
+                candidate_count = min(args.top_k, len(ids))
+                order = np.argsort(-policy_logits[row, ids], kind="stable")[:candidate_count]
+                candidates = ids[order]
+                candidates_by_game[game_id] = candidates
+                policy_row_by_game[game_id] = row
+                legal_by_game[game_id] = ids
+                payload = ",".join(str(int(action_id)) for action_id in candidates)
+                process.stdin.write(f"Q\t{game_id}\t{payload}\n")
+            process.stdin.flush()
+
+            value_header = process.stdout.readline().rstrip("\n").split("\t")
+            if len(value_header) != 2 or value_header[0] != "V":
+                raise RuntimeError("arena did not return candidate expansions")
+            expanded_count = int(value_header[1])
+            candidate_positions += expanded_count
+            candidate_values: dict[tuple[int, int], float] = {}
+            child_keys: list[tuple[int, int]] = []
+            child_boards: list[np.ndarray] = []
+            child_hands: list[np.ndarray] = []
+            child_metas: list[np.ndarray] = []
+            for _ in range(expanded_count):
+                candidate_fields = process.stdout.readline().rstrip("\n").split("\t")
+                if len(candidate_fields) != 5 or candidate_fields[0] != "C":
+                    raise RuntimeError("invalid candidate expansion protocol")
+                game_id = int(candidate_fields[1])
+                action_id = int(candidate_fields[2])
+                exact_value = int(candidate_fields[3])
+                if action_id not in set(int(value) for value in candidates_by_game[game_id]):
+                    raise RuntimeError("arena expanded an unrequested candidate")
+                key = (game_id, action_id)
+                if exact_value != 2:
+                    candidate_values[key] = float(exact_value)
+                else:
+                    board, hand, meta = parse_state(candidate_fields[4])
+                    child_keys.append(key)
+                    child_boards.append(board)
+                    child_hands.append(hand)
+                    child_metas.append(meta)
+
+            if child_keys:
+                value_started = time.perf_counter()
+                _, child_values = session.run(None, {
+                    "board": np.stack(child_boards), "hand": np.stack(child_hands),
+                    "meta": np.stack(child_metas),
+                })
+                inference_seconds += time.perf_counter() - value_started
+                inference_positions += len(child_keys)
+                inference_batches += 1
+                batch_sizes.append(len(child_keys))
+                if child_values.shape != (len(child_keys),) or not np.isfinite(child_values).all():
+                    raise RuntimeError("ONNX returned invalid child values")
+                for key, child_value in zip(child_keys, child_values, strict=True):
+                    # 子局面轮到对手，取负号还原为当前走子方价值。
+                    candidate_values[key] = -float(child_value)
+
+            for game_id in game_ids:
+                row = policy_row_by_game[game_id]
+                candidates = candidates_by_game[game_id]
+                best_policy = float(np.max(policy_logits[row, legal_by_game[game_id]]))
+                scores = [
+                    args.policy_weight * (float(policy_logits[row, action_id]) - best_policy)
+                    + args.value_weight * candidate_values[(game_id, int(action_id))]
+                    for action_id in candidates
+                ]
+                action_id = int(candidates[int(np.argmax(scores))])
+                reranked_actions += int(action_id != int(candidates[0]))
                 process.stdin.write(f"A\t{game_id}\t{action_id}\n")
             process.stdin.flush()
             continue
@@ -194,6 +278,10 @@ def main() -> int:
         "arena_commit": arena_commit,
         "opening_plies": args.opening_plies, "max_plies": args.max_plies,
         "threads": args.threads, "seed": args.seed,
+        "selection": {"top_k": args.top_k, "policy_weight": args.policy_weight,
+                      "value_weight": args.value_weight,
+                      "reranked_actions": reranked_actions,
+                      "candidate_positions": candidate_positions},
         "neural": {"wins": counts["win"], "draws": counts["draw"],
                    "losses": counts["loss"], "truncated": counts["truncated"],
                    "score_rate": ((counts["win"] + 0.5 * counts["draw"]) / completed
