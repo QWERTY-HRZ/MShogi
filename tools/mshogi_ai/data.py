@@ -125,7 +125,9 @@ def load_shard(path: Path | str) -> Shard:
                          f"game length mismatch at line {line_number}")
                 winner = int(record["winner"])
                 reason = str(record["end_reason"])
-                truncated = bool(record["truncated"])
+                _require(isinstance(record["truncated"], bool),
+                         f"truncated must be boolean at line {line_number}")
+                truncated = record["truncated"]
                 _require(winner in (0, 1, 2), f"invalid winner at line {line_number}")
                 if truncated:
                     _require(winner == 0 and reason == "ply_limit",
@@ -158,8 +160,12 @@ def load_shard(path: Path | str) -> Shard:
     return Shard(shard_path, metadata, tuple(games))
 
 
-def _split_name(path: Path, game_id: int, seed: int) -> str:
-    key = f"{path.name}:{game_id}:{seed}".encode("utf-8")
+def _game_identity(shard: Shard, game_id: int) -> str:
+    return f"{shard.metadata['core_commit']}:{shard.metadata['seed']}:{game_id}"
+
+
+def _split_name(identity: str, seed: int) -> str:
+    key = f"{identity}:{seed}".encode("utf-8")
     bucket = int.from_bytes(hashlib.sha256(key).digest()[:8], "big") % 10
     if bucket < 8:
         return "train"
@@ -178,11 +184,15 @@ def load_split_samples(
     }
     game_counts = {"train": 0, "validation": 0, "test": 0}
     shards: list[Shard] = []
+    identities: set[str] = set()
     for path in sorted((Path(item) for item in paths), key=lambda item: str(item)):
         shard = load_shard(path)
         shards.append(shard)
         for game in shard.games:
-            split = _split_name(shard.path, game.game_id, split_seed)
+            identity = _game_identity(shard, game.game_id)
+            _require(identity not in identities, f"duplicate game identity: {identity}")
+            identities.add(identity)
+            split = _split_name(identity, split_seed)
             game_counts[split] += 1
             splits[split].extend((position, game.truncated) for position in game.positions)
     return splits, shards, game_counts

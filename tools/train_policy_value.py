@@ -4,6 +4,7 @@ import argparse
 import glob
 import json
 import random
+import subprocess
 import time
 from pathlib import Path
 
@@ -39,6 +40,18 @@ def set_reproducible_seed(seed: int) -> None:
     if hasattr(torch.backends, "cudnn"):
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
+
+
+def training_commit() -> str:
+    repository = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        ["git", "rev-parse", "--short=12", "HEAD"],
+        cwd=repository,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else "unknown"
 
 
 def run_loader(
@@ -166,6 +179,7 @@ def main() -> int:
         channels=args.channels, residual_blocks=args.residual_blocks
     )
     model = MShogiNet(model_config).to(device)
+    source_commit = training_commit()
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
     )
@@ -175,6 +189,7 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     manifest = {
         "rule_version": RULE_VERSION,
+        "training_commit": source_commit,
         "seed": args.seed,
         "split_seed": args.split_seed,
         "device": str(device),
@@ -228,6 +243,7 @@ def main() -> int:
             torch.save({
                 "checkpoint_format": 1,
                 "rule_version": RULE_VERSION,
+                "training_commit": source_commit,
                 "model_config": model_config.to_dict(),
                 "model_state": model.state_dict(),
                 "epoch": epoch,
@@ -237,6 +253,7 @@ def main() -> int:
     torch.save({
         "checkpoint_format": 1,
         "rule_version": RULE_VERSION,
+        "training_commit": source_commit,
         "model_config": model_config.to_dict(),
         "model_state": model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
