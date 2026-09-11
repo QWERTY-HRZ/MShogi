@@ -94,6 +94,12 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
 
 `mshogi_arena` 由 C++ GameCore 管理规则和多线程 Alpha-Beta，Python 将神经方局面批量送入 ONNX Runtime。每两局共享同一随机开局并交换模型先后手。当前 1k 监督模型未通过对战门槛，因此尚未接入客户端。
 
+使用价值头重排策略 top-5 候选：
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/run_onnx_arena.py --arena-exe ./Src/Build/MinGW_13_1_0-Release/src/mshogi_arena.exe --model ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/manifest.json --output ./Dataset/AI/v1.11.0/models/supervised_1k/evaluation/value_rerank --games 1000 --depth 1 --top-k 5 --policy-weight 1 --value-weight 0.5
+
+候选动作由策略头产生，在 C++ GameCore 中各展开一手；立即终局使用精确胜负值，其他子局面批量送入价值头。当前配置改善了对战结果，但仍未通过客户端部署门槛。
+
 ## 许可证
 
 项目采用 [GNU GPL v3](LICENSE)。

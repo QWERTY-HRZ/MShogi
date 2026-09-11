@@ -92,6 +92,12 @@ Export dynamic-batch ONNX and verify numerical and legal-masked action equivalen
 
 `mshogi_arena` keeps rules and multithreaded Alpha-Beta in the C++ GameCore while Python batches neural positions through ONNX Runtime. Paired games share an opening and swap model sides. The current 1k supervised model did not pass its arena gate and is not exposed in the desktop client.
 
+Use the value head to rerank the policy's top-five candidates:
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/run_onnx_arena.py --arena-exe ./Src/Build/MinGW_13_1_0-Release/src/mshogi_arena.exe --model ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/manifest.json --output ./Dataset/AI/v1.11.0/models/supervised_1k/evaluation/value_rerank --games 1000 --depth 1 --top-k 5 --policy-weight 1 --value-weight 0.5
+
+Policy candidates are expanded by the C++ GameCore. Immediate terminal actions use exact outcomes, while non-terminal child positions are batch-evaluated by the value head. This improves play but the current model still fails the desktop deployment gate.
+
 ## License
 
 MShogi is licensed under the [GNU General Public License v3](LICENSE).
