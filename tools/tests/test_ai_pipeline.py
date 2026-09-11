@@ -11,6 +11,7 @@ from mshogi_ai.data import (
     teacher_policy,
 )
 from mshogi_ai.model import MShogiNet, ModelConfig, policy_value_loss
+from run_onnx_arena import wilson_interval
 
 
 def sample_state() -> str:
@@ -86,3 +87,13 @@ def test_policy_value_network_shapes_and_masked_loss() -> None:
     assert torch.isfinite(loss)
     assert torch.isfinite(policy_loss)
     assert torch.isfinite(value_loss)
+
+
+def test_wilson_interval_handles_empty_and_extreme_results() -> None:
+    assert wilson_interval(0, 0) == [0.0, 0.0]
+    lower, upper = wilson_interval(0, 100)
+    assert lower == 0.0
+    assert 0.03 < upper < 0.04
+    lower, upper = wilson_interval(100, 100)
+    assert 0.96 < lower < 0.97
+    assert upper == 1.0

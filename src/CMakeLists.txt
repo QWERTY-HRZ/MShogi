@@ -71,6 +71,9 @@ target_link_libraries(mshogi_selfplay PRIVATE MShogiSelfPlay)
 
 add_executable(mshogi_replay_verify ReplayVerifyMain.cpp)
 target_link_libraries(mshogi_replay_verify PRIVATE MShogiSelfPlay)
+
+add_executable(mshogi_arena ArenaMain.cpp)
+target_link_libraries(mshogi_arena PRIVATE MShogiSelfPlay)
 execute_process(
     COMMAND git rev-parse --short=12 HEAD
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -82,6 +85,9 @@ if(NOT MSHOGI_GIT_COMMIT)
     set(MSHOGI_GIT_COMMIT unknown)
 endif()
 target_compile_definitions(mshogi_selfplay PRIVATE
+    MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
+)
+target_compile_definitions(mshogi_arena PRIVATE
     MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
 )
 
