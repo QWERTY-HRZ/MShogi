@@ -86,6 +86,12 @@ Compare CPU/GPU forward-only inference throughput without training:
 
     conda run -n MShogi python ./Src/Mixed-Shogi/tools/benchmark_model.py --checkpoint ./Dataset/AI/v1.11.0/models/supervised_1k/checkpoints/best.pt --devices cpu cuda --output ./Dataset/AI/v1.11.0/models/supervised_1k/benchmarks/cpu_gpu.json
 
+Export dynamic-batch ONNX and verify numerical and legal-masked action equivalence:
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/export_onnx.py --checkpoint ./Dataset/AI/v1.11.0/models/supervised_1k/checkpoints/best.pt --data ./Dataset/AI/v1.11.0/selfplay/supervised_1k_seed_20260911.jsonl.gz --output ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/manifest.json
+
+`mshogi_arena` keeps rules and multithreaded Alpha-Beta in the C++ GameCore while Python batches neural positions through ONNX Runtime. Paired games share an opening and swap model sides. The current 1k supervised model did not pass its arena gate and is not exposed in the desktop client.
+
 ## License
 
 MShogi is licensed under the [GNU General Public License v3](LICENSE).

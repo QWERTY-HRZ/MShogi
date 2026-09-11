@@ -88,6 +88,12 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
 
     conda run -n MShogi python ./Src/Mixed-Shogi/tools/benchmark_model.py --checkpoint ./Dataset/AI/v1.11.0/models/supervised_1k/checkpoints/best.pt --devices cpu cuda --output ./Dataset/AI/v1.11.0/models/supervised_1k/benchmarks/cpu_gpu.json
 
+导出动态 batch ONNX 并检查 PyTorch/ONNX Runtime 的数值与合法选招一致性：
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/export_onnx.py --checkpoint ./Dataset/AI/v1.11.0/models/supervised_1k/checkpoints/best.pt --data ./Dataset/AI/v1.11.0/selfplay/supervised_1k_seed_20260911.jsonl.gz --output ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/manifest.json
+
+`mshogi_arena` 由 C++ GameCore 管理规则和多线程 Alpha-Beta，Python 将神经方局面批量送入 ONNX Runtime。每两局共享同一随机开局并交换模型先后手。当前 1k 监督模型未通过对战门槛，因此尚未接入客户端。
+
 ## 许可证
 
 项目采用 [GNU GPL v3](LICENSE)。

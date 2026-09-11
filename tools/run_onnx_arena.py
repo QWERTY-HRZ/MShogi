@@ -134,6 +134,7 @@ def main() -> int:
                     raise RuntimeError("arena provided an invalid legal action list")
                 legal_ids.append(ids)
 
+            # 将所有待走局面合并推理，CPU 线程留给并行 Alpha-Beta 搜索。
             inference_started = time.perf_counter()
             policy_logits, values = session.run(None, {
                 "board": np.stack(boards), "hand": np.stack(hands),

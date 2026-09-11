@@ -29,6 +29,7 @@ def main() -> int:
         "warmup": args.warmup, "iterations": args.iterations, "runs": [],
     }
     for threads in args.thread_counts:
+        # 同时覆盖桌面单步与批量评估，找出各场景最合适的线程数。
         options = ort.SessionOptions()
         options.intra_op_num_threads = threads
         options.inter_op_num_threads = 1
