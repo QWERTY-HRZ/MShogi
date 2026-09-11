@@ -68,6 +68,9 @@ target_link_libraries(MShogiSelfPlay PUBLIC MShogiCore MShogiZlib)
 
 add_executable(mshogi_selfplay SelfPlayMain.cpp)
 target_link_libraries(mshogi_selfplay PRIVATE MShogiSelfPlay)
+
+add_executable(mshogi_replay_verify ReplayVerifyMain.cpp)
+target_link_libraries(mshogi_replay_verify PRIVATE MShogiSelfPlay)
 execute_process(
     COMMAND git rev-parse --short=12 HEAD
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}

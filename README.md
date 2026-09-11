@@ -72,6 +72,16 @@ Validate a shard with the `MShogi` Conda environment:
 
 The same rules, commit, arguments, and seed produce the same records. Threefold repetition is a rules-level draw recorded as `threefold_repetition`; games reaching `max-plies` are separately recorded as `ply_limit` truncations.
 
+Strict replay uses Python's JSON parser, then checks every state transition with the C++ GameCore:
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/verify_selfplay.py ./Dataset/AI/v1.11.0/selfplay/train_0001.jsonl.gz --replay-exe ./Src/Build/MinGW_13_1_0-Release/src/mshogi_replay_verify.exe
+
+Train the supervised policy-value baseline with ten board planes, hand/cooldown features, rules metadata, a 990-action policy head, and a scalar value head. The default network uses 64 channels and six residual blocks:
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/train_policy_value.py --data "./Dataset/AI/v1.11.0/selfplay/*.jsonl.gz" --output ./Dataset/AI/v1.11.0/models/supervised_1k --epochs 5 --batch-size 256 --device cpu
+
+Games are deterministically split between training, validation, and test sets. Training adds a 180-degree rotated, player-swapped copy; truncated positions are excluded from value loss. Each run stores its configuration, shard hashes, TensorBoard logs, best/final checkpoints, and test metrics.
+
 ## License
 
 MShogi is licensed under the [GNU General Public License v3](LICENSE).

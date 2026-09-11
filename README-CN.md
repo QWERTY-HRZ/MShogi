@@ -74,6 +74,16 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
 
 相同规则版本、提交、参数和随机种子会生成相同记录。三次重复是正式和棋，记录为 `threefold_repetition`；达到 `max-plies` 的对局仅标记为 `ply_limit` 截断，两者分别统计。
 
+严格重放会先用 Python 标准 JSON 解析，再把动作和状态交给 C++ GameCore 逐步核对：
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/verify_selfplay.py ./Dataset/AI/v1.11.0/selfplay/train_0001.jsonl.gz --replay-exe ./Src/Build/MinGW_13_1_0-Release/src/mshogi_replay_verify.exe
+
+监督策略价值基线使用 10 个盘面平面、手驹/禁手张量和规则元数据，输出 990 维策略及单一价值。默认网络为 64 通道、6 个残差块：
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/train_policy_value.py --data "./Dataset/AI/v1.11.0/selfplay/*.jsonl.gz" --output ./Dataset/AI/v1.11.0/models/supervised_1k --epochs 5 --batch-size 256 --device cpu
+
+脚本按整局确定性划分训练/验证/测试集，训练集追加 180 度旋转换手副本。截断局面不参与价值损失，运行目录保存配置、数据哈希、TensorBoard 日志、最佳/最终检查点和测试指标。
+
 ## 许可证
 
 项目采用 [GNU GPL v3](LICENSE)。
