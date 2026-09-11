@@ -82,6 +82,10 @@ Train the supervised policy-value baseline with ten board planes, hand/cooldown 
 
 Games are deterministically split between training, validation, and test sets. Training adds a 180-degree rotated, player-swapped copy; truncated positions are excluded from value loss. Each run keeps model files under `checkpoints/`, metrics and configuration under `reports/`, and event logs under `tensorboard/`.
 
+Compare CPU/GPU forward-only inference throughput without training:
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/benchmark_model.py --checkpoint ./Dataset/AI/v1.11.0/models/supervised_1k/checkpoints/best.pt --devices cpu cuda --output ./Dataset/AI/v1.11.0/models/supervised_1k/benchmarks/cpu_gpu.json
+
 ## License
 
 MShogi is licensed under the [GNU General Public License v3](LICENSE).

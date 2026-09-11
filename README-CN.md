@@ -84,6 +84,10 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
 
 脚本按整局确定性划分训练/验证/测试集，训练集追加 180 度旋转换手副本。截断局面不参与价值损失；运行目录的 `checkpoints/` 单独保存模型文件，`reports/` 保存配置和指标，`tensorboard/` 保存训练日志。
 
+可在不训练模型的情况下比较 CPU/GPU 前向推理吞吐：
+
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/benchmark_model.py --checkpoint ./Dataset/AI/v1.11.0/models/supervised_1k/checkpoints/best.pt --devices cpu cuda --output ./Dataset/AI/v1.11.0/models/supervised_1k/benchmarks/cpu_gpu.json
+
 ## 许可证
 
 项目采用 [GNU GPL v3](LICENSE)。

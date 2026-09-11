@@ -20,6 +20,6 @@ dependencies:
       - tensorboard
       - pybind11
 
-# 本地调试使用官方 CPU wheel：
-# python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
-# GPU 训练机可改用与驱动匹配的官方 CUDA wheel。
+# CUDA 12.9 驱动下使用官方 CUDA 12.6 wheel（Windows/Python 3.11）：
+# python -m pip install torch==2.13.0+cu126 --index-url https://download.pytorch.org/whl/cu126
+# 如仅需 CPU 调试，可改用 https://download.pytorch.org/whl/cpu。
