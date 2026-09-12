@@ -9,7 +9,7 @@ import onnx
 import onnxruntime as ort
 import torch
 
-from mshogi_ai.data import MShogiDataset, load_shard, sha256_file
+from mshogi_ai.data import MShogiDataset, TrainingSample, load_shard, sha256_file
 from mshogi_ai.model import MShogiNet, ModelConfig
 
 
@@ -53,13 +53,14 @@ def main() -> int:
 
     shard = load_shard(args.data)
     records = [
-        (position, game.truncated)
+        TrainingSample(position, game.truncated,
+                       len(game.positions) - position.ply, game.end_reason)
         for game in shard.games for position in game.positions
     ][:args.samples]
     dataset = MShogiDataset(records)
-    boards = torch.stack([dataset[index]["board"] for index in range(len(dataset))])
-    hands = torch.stack([dataset[index]["hand"] for index in range(len(dataset))])
-    metas = torch.stack([dataset[index]["meta"] for index in range(len(dataset))])
+    boards = torch.stack([dataset[index]["board"] for index in range(len(dataset))]).float()
+    hands = torch.stack([dataset[index]["hand"] for index in range(len(dataset))]).float()
+    metas = torch.stack([dataset[index]["meta"] for index in range(len(dataset))]).float()
     with torch.inference_mode():
         torch_policy, torch_value = model(boards, hands, metas)
 

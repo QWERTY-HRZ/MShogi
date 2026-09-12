@@ -50,6 +50,22 @@ class Shard:
     games: tuple[GameRecord, ...]
 
 
+@dataclass(frozen=True)
+class ShardSummary:
+    path: Path
+    metadata: dict[str, object]
+    games: int
+    positions: int
+
+
+@dataclass(frozen=True)
+class TrainingSample:
+    position: PositionRecord
+    truncated: bool
+    remaining_plies: int
+    end_reason: str
+
+
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
@@ -175,26 +191,35 @@ def _split_name(identity: str, seed: int) -> str:
 def load_split_samples(
     paths: Iterable[Path | str], split_seed: int = 20260911
 ) -> tuple[
-    dict[str, list[tuple[PositionRecord, bool]]],
-    list[Shard],
+    dict[str, list[TrainingSample]],
+    list[ShardSummary],
     dict[str, int],
 ]:
-    splits: dict[str, list[tuple[PositionRecord, bool]]] = {
+    splits: dict[str, list[TrainingSample]] = {
         "train": [], "validation": [], "test": []
     }
     game_counts = {"train": 0, "validation": 0, "test": 0}
-    shards: list[Shard] = []
+    shards: list[ShardSummary] = []
     identities: set[str] = set()
     for path in sorted((Path(item) for item in paths), key=lambda item: str(item)):
         shard = load_shard(path)
-        shards.append(shard)
+        shards.append(ShardSummary(
+            shard.path, shard.metadata, len(shard.games),
+            sum(len(game.positions) for game in shard.games)
+        ))
         for game in shard.games:
             identity = _game_identity(shard, game.game_id)
             _require(identity not in identities, f"duplicate game identity: {identity}")
             identities.add(identity)
             split = _split_name(identity, split_seed)
             game_counts[split] += 1
-            splits[split].extend((position, game.truncated) for position in game.positions)
+            splits[split].extend(
+                TrainingSample(position, game.truncated,
+                               len(game.positions) - position.ply, game.end_reason)
+                for position in game.positions
+            )
+        # 只保留清单摘要，避免 20k 训练时重复持有完整对局树。
+        del shard
     return splits, shards, game_counts
 
 
@@ -271,21 +296,31 @@ ROTATED_ACTION_IDS = np.asarray(
 class MShogiDataset(Dataset[dict[str, torch.Tensor]]):
     def __init__(
         self,
-        samples: Sequence[tuple[PositionRecord, bool]],
+        samples: Sequence[TrainingSample],
         teacher_temperature: float = 1.0,
         augment: bool = False,
+        terminal_value_boost: float = 0.0,
+        terminal_value_decay: float = 8.0,
+        value_discount: float = 1.0,
     ) -> None:
+        _require(terminal_value_boost >= 0.0, "terminal value boost must be non-negative")
+        _require(terminal_value_decay > 0.0, "terminal value decay must be positive")
+        _require(0.0 < value_discount <= 1.0, "value discount must be in (0, 1]")
         self.augment = augment
         count = len(samples)
-        self.boards = np.zeros((count, 10, ROWS, COLS), dtype=np.float32)
-        self.hands = np.zeros((count, 2, 3, 4), dtype=np.float32)
-        self.metas = np.zeros((count, 5), dtype=np.float32)
+        self.boards = np.zeros((count, 10, ROWS, COLS), dtype=np.uint8)
+        self.hands = np.zeros((count, 2, 3, 4), dtype=np.uint8)
+        self.metas = np.zeros((count, 5), dtype=np.float16)
         self.legal_masks = np.zeros((count, ACTION_COUNT), dtype=np.bool_)
-        self.policy_targets = np.zeros((count, ACTION_COUNT), dtype=np.float32)
+        self.policy_targets = np.zeros((count, ACTION_COUNT), dtype=np.float16)
         self.value_targets = np.zeros((count,), dtype=np.float32)
-        self.value_masks = np.ones((count,), dtype=np.float32)
+        self.value_weights = np.ones((count,), dtype=np.float32)
+        self.value_valid = np.ones((count,), dtype=np.float32)
+        self.plies = np.zeros((count,), dtype=np.int16)
+        self.remaining_plies = np.zeros((count,), dtype=np.int16)
 
-        for index, (position, truncated) in enumerate(samples):
+        for index, sample in enumerate(samples):
+            position = sample.position
             board, hand, meta = parse_state(position.state)
             self.boards[index] = board
             self.hands[index] = hand
@@ -295,9 +330,15 @@ class MShogiDataset(Dataset[dict[str, torch.Tensor]]):
             self.policy_targets[index] = teacher_policy(
                 position.legal_actions, teacher_temperature
             )
-            self.value_targets[index] = float(position.outcome)
+            distance = max(0, sample.remaining_plies - 1)
+            self.value_targets[index] = float(position.outcome) * value_discount ** distance
             # 截断不是规则和棋，不用伪标签训练价值头。
-            self.value_masks[index] = 0.0 if truncated else 1.0
+            self.value_valid[index] = 0.0 if sample.truncated else 1.0
+            self.value_weights[index] = self.value_valid[index] * (
+                1.0 + terminal_value_boost * math.exp(-distance / terminal_value_decay)
+            )
+            self.plies[index] = position.ply
+            self.remaining_plies[index] = sample.remaining_plies
 
     def __len__(self) -> int:
         return len(self.boards) * (2 if self.augment else 1)
@@ -331,7 +372,12 @@ class MShogiDataset(Dataset[dict[str, torch.Tensor]]):
             "legal_mask": torch.from_numpy(np.asarray(legal)),
             "policy_target": torch.from_numpy(np.asarray(policy)),
             "value_target": torch.tensor(self.value_targets[base_index]),
-            "value_mask": torch.tensor(self.value_masks[base_index]),
+            "value_weight": torch.tensor(self.value_weights[base_index]),
+            "value_valid": torch.tensor(self.value_valid[base_index]),
+            "ply": torch.tensor(self.plies[base_index], dtype=torch.int32),
+            "remaining_plies": torch.tensor(
+                self.remaining_plies[base_index], dtype=torch.int32
+            ),
         }
 
 

@@ -79,13 +79,13 @@ def policy_value_loss(
     legal_mask: torch.Tensor,
     policy_target: torch.Tensor,
     value_target: torch.Tensor,
-    value_mask: torch.Tensor,
+    value_sample_weight: torch.Tensor,
     value_weight: float = 1.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     masked_logits = policy_logits.masked_fill(~legal_mask, -1.0e9)
     policy_loss = -(policy_target * F.log_softmax(masked_logits, dim=1)).sum(dim=1).mean()
-    value_errors = (value - value_target).square() * value_mask
-    value_loss = value_errors.sum() / value_mask.sum().clamp_min(1.0)
+    value_errors = (value - value_target).square() * value_sample_weight
+    value_loss = value_errors.sum() / value_sample_weight.sum().clamp_min(1.0)
     return policy_loss + value_weight * value_loss, policy_loss, value_loss
 
 

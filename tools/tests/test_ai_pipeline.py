@@ -6,6 +6,7 @@ import torch
 from mshogi_ai.data import (
     MShogiDataset,
     PositionRecord,
+    TrainingSample,
     parse_state,
     rotate_action_id,
     teacher_policy,
@@ -56,15 +57,36 @@ def test_rotation_is_an_involution_and_swaps_players() -> None:
         selected_action=677,
         outcome=1,
     )
-    dataset = MShogiDataset(((position, False),), augment=True)
+    dataset = MShogiDataset((TrainingSample(position, False, 12, "king_captured"),),
+                            augment=True)
     original = dataset[0]
     rotated = dataset[1]
     assert len(dataset) == 2
     assert torch.equal(rotated["meta"][:2], torch.tensor([0.0, 1.0]))
     assert torch.equal(rotated["meta"][2:4], torch.tensor([0.0, 1.0]))
-    assert torch.isclose(original["policy_target"].sum(), torch.tensor(1.0))
-    assert torch.isclose(rotated["policy_target"].sum(), torch.tensor(1.0))
+    assert torch.isclose(original["policy_target"].sum().float(), torch.tensor(1.0),
+                         atol=1.0e-3)
+    assert torch.isclose(rotated["policy_target"].sum().float(), torch.tensor(1.0),
+                         atol=1.0e-3)
     assert int(rotated["legal_mask"].sum()) == 2
+    assert original["board"].dtype == torch.uint8
+    assert original["policy_target"].dtype == torch.float16
+
+
+def test_terminal_distance_weights_and_truncation_mask() -> None:
+    position = PositionRecord(0, 4, "S", sample_state(), ((677, 0.2),), 677, 1)
+    terminal = MShogiDataset(
+        (TrainingSample(position, False, 1, "king_captured"),),
+        terminal_value_boost=2.0, terminal_value_decay=8.0, value_discount=0.9,
+    )[0]
+    truncated = MShogiDataset(
+        (TrainingSample(position, True, 9, "ply_limit"),),
+        terminal_value_boost=2.0, terminal_value_decay=8.0,
+    )[0]
+    assert torch.isclose(terminal["value_target"], torch.tensor(1.0))
+    assert torch.isclose(terminal["value_weight"], torch.tensor(3.0))
+    assert truncated["value_valid"] == 0.0
+    assert truncated["value_weight"] == 0.0
 
 
 def test_policy_value_network_shapes_and_masked_loss() -> None:
