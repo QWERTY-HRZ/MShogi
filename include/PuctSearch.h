@@ -9,9 +9,11 @@
 
 struct PuctConfig {
     int simulations = 16;
+    int leavesPerBatch = 1;
     double exploration = 1.5;
     double dirichletAlpha = 0.3;
     double dirichletEpsilon = 0.25;
+    double virtualLoss = 1.0;
 };
 
 struct ActionVisit {
@@ -31,6 +33,7 @@ struct PuctStatistics {
     std::uint64_t simulations = 0;
     std::uint64_t inferenceBatches = 0;
     std::uint64_t inferencePositions = 0;
+    std::uint64_t maxInferenceBatch = 0;
     std::uint64_t treeReuseHits = 0;
 };
 
@@ -56,6 +59,8 @@ private:
     PendingLeaf selectLeaf(Node& root);
     void expand(Node& node, const PolicyValuePrediction& prediction);
     void addRootNoise(Node& root, std::uint64_t seed) const;
+    static void reservePath(const std::vector<Node*>& path, double virtualLoss);
+    static void releasePath(const std::vector<Node*>& path, double virtualLoss);
     static void backpropagate(const std::vector<Node*>& path, double value);
     static double terminalValue(const GameCore& position);
     static Move selectByVisits(const Node& root, double temperature,

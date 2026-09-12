@@ -170,6 +170,8 @@ PuctSelfPlaySummary PuctSelfPlayRunner::run(const PuctSelfPlayConfig& config) {
              << config.modelSha256 << "\",\"seed\":" << config.seed
              << ",\"games\":" << config.games
              << ",\"simulations\":" << config.search.simulations
+             << ",\"leaves_per_batch\":" << config.search.leavesPerBatch
+             << ",\"virtual_loss\":" << config.search.virtualLoss
              << ",\"c_puct\":" << config.search.exploration
              << ",\"dirichlet_alpha\":" << config.search.dirichletAlpha
              << ",\"dirichlet_epsilon\":" << config.search.dirichletEpsilon

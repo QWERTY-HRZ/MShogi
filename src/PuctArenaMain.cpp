@@ -23,9 +23,11 @@ struct ArenaGame {
 struct Config {
     int games = 20;
     int simulations = 16;
+    int leavesPerBatch = 1;
     int openingPlies = 6;
     int maxPlies = 100;
     double exploration = 1.5;
+    double virtualLoss = 1.0;
     std::uint64_t seed = 1;
     std::string runtimePath;
     std::string candidatePath;
@@ -108,6 +110,8 @@ int main(int argc, char* argv[]) {
             else if (option == "--champion") config.championPath = requireValue(index, argc, argv);
             else if (option == "--games") config.games = std::stoi(requireValue(index, argc, argv));
             else if (option == "--simulations") config.simulations = std::stoi(requireValue(index, argc, argv));
+            else if (option == "--leaves-per-batch") config.leavesPerBatch = std::stoi(requireValue(index, argc, argv));
+            else if (option == "--virtual-loss") config.virtualLoss = std::stod(requireValue(index, argc, argv));
             else if (option == "--c-puct") config.exploration = std::stod(requireValue(index, argc, argv));
             else if (option == "--opening-plies") config.openingPlies = std::stoi(requireValue(index, argc, argv));
             else if (option == "--max-plies") config.maxPlies = std::stoi(requireValue(index, argc, argv));
@@ -115,6 +119,7 @@ int main(int argc, char* argv[]) {
             else throw std::invalid_argument("未知选项: " + option);
         }
         if (config.games <= 0 || config.games % 2 != 0 || config.simulations < 2 ||
+            config.leavesPerBatch <= 0 || config.virtualLoss < 0.0 ||
             config.openingPlies < 0 || config.maxPlies <= config.openingPlies ||
             config.runtimePath.empty() || config.candidatePath.empty() ||
             config.championPath.empty()) {
@@ -125,14 +130,17 @@ int main(int argc, char* argv[]) {
         OnnxEvaluator championEvaluator(config.runtimePath, config.championPath);
         PuctConfig searchConfig;
         searchConfig.simulations = config.simulations;
+        searchConfig.leavesPerBatch = config.leavesPerBatch;
         searchConfig.exploration = config.exploration;
+        searchConfig.virtualLoss = config.virtualLoss;
         searchConfig.dirichletEpsilon = 0.0;
         PuctBatchSearch candidateSearch(candidateEvaluator, searchConfig, config.games);
         PuctBatchSearch championSearch(championEvaluator, searchConfig, config.games);
 
         std::vector<ArenaGame> games(config.games);
         std::cout << "M\t" << MSHOGI_CORE_COMMIT << '\t'
-                  << GameConstants::RULE_VERSION << '\t' << config.simulations << '\n';
+                  << GameConstants::RULE_VERSION << '\t' << config.simulations << '\t'
+                  << config.leavesPerBatch << '\t' << config.virtualLoss << '\n';
         for (int pairId = 0; pairId < config.games / 2; ++pairId) {
             ArenaGame& candidateSente = games[pairId * 2];
             ArenaGame& candidateGote = games[pairId * 2 + 1];
@@ -186,11 +194,13 @@ int main(int argc, char* argv[]) {
         std::cout << "S\tC\t" << candidateStats.simulations << '\t'
                   << candidateStats.inferenceBatches << '\t'
                   << candidateStats.inferencePositions << '\t'
-                  << candidateStats.treeReuseHits << '\n';
+                  << candidateStats.treeReuseHits << '\t'
+                  << candidateStats.maxInferenceBatch << '\n';
         std::cout << "S\tH\t" << championStats.simulations << '\t'
                   << championStats.inferenceBatches << '\t'
                   << championStats.inferencePositions << '\t'
-                  << championStats.treeReuseHits << '\n';
+                  << championStats.treeReuseHits << '\t'
+                  << championStats.maxInferenceBatch << '\n';
         std::cout << "D\t" << config.games << '\n';
         return 0;
     } catch (const std::exception& error) {

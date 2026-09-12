@@ -18,6 +18,7 @@ struct PuctBatchSearch::Node {
     int visits = 0;
     double valueSum = 0.0;
     bool expanded = false;
+    bool pending = false;
     std::vector<std::unique_ptr<Node>> children;
 };
 
@@ -43,7 +44,8 @@ PuctBatchSearch::PuctBatchSearch(const PolicyValueEvaluator& evaluator,
                                  PuctConfig config, std::size_t slots)
     : m_evaluator(evaluator), m_config(config), m_roots(slots),
       m_reusedForSearch(slots, false) {
-    if (config.simulations < 2 || config.exploration < 0.0 ||
+    if (config.simulations < 2 || config.leavesPerBatch <= 0 ||
+        config.exploration < 0.0 || config.virtualLoss < 0.0 ||
         config.dirichletAlpha <= 0.0 || config.dirichletEpsilon < 0.0 ||
         config.dirichletEpsilon > 1.0 || slots == 0) {
         throw std::invalid_argument("无效的 PUCT 配置");
@@ -154,6 +156,23 @@ void PuctBatchSearch::backpropagate(const std::vector<Node*>& path, double value
     }
 }
 
+void PuctBatchSearch::reservePath(const std::vector<Node*>& path,
+                                  double virtualLoss) {
+    for (Node* node : path) {
+        ++node->visits;
+        // 临时正价值会让父节点看到负 Q，避免同批模拟拥挤到同一分支。
+        node->valueSum += virtualLoss;
+    }
+}
+
+void PuctBatchSearch::releasePath(const std::vector<Node*>& path,
+                                  double virtualLoss) {
+    for (Node* node : path) {
+        --node->visits;
+        node->valueSum -= virtualLoss;
+    }
+}
+
 double PuctBatchSearch::terminalValue(const GameCore& position) {
     if (!position.isTerminal() || position.winner() == 0) return 0.0;
     return position.winner() == winnerFor(position.currentPlayer()) ? 1.0 : -1.0;
@@ -197,41 +216,77 @@ std::vector<std::optional<PuctResult>> PuctBatchSearch::search(
                 throw std::invalid_argument("不能搜索终局");
             }
             synchronizeRoot(slot, *positions[slot]);
+            if (temperatures[slot] < 0.0) {
+                throw std::invalid_argument("PUCT 温度不能为负数");
+            }
             ++m_statistics.searches;
         }
     }
 
-    for (int simulation = 0; simulation < m_config.simulations; ++simulation) {
+    std::vector<int> completed(positions.size(), 0);
+    std::vector<bool> noiseApplied(positions.size(), false);
+    for (std::size_t slot = 0; slot < positions.size(); ++slot) {
+        if (positions[slot] && m_roots[slot]->expanded) {
+            addRootNoise(*m_roots[slot], seeds[slot]);
+            noiseApplied[slot] = true;
+        }
+    }
+    while (true) {
         std::vector<PendingLeaf> pending;
         std::vector<GameCore> inferencePositions;
+        bool progressed = false;
         for (std::size_t slot = 0; slot < positions.size(); ++slot) {
             if (!positions[slot]) continue;
-            PendingLeaf leaf = selectLeaf(*m_roots[slot]);
-            if (leaf.leaf->position.isTerminal()) {
-                backpropagate(leaf.path, terminalValue(leaf.leaf->position));
-            } else {
-                inferencePositions.push_back(leaf.leaf->position.fork());
-                pending.push_back(std::move(leaf));
-            }
-            ++m_statistics.simulations;
-        }
-        if (inferencePositions.empty()) continue;
-        // 不同并行棋局的叶节点合成一次动态 batch，降低 ONNX 调用开销。
-        const auto predictions = m_evaluator.evaluate(inferencePositions);
-        if (predictions.size() != pending.size()) {
-            throw std::runtime_error("评估器返回数量与叶节点不一致");
-        }
-        ++m_statistics.inferenceBatches;
-        m_statistics.inferencePositions += predictions.size();
-        for (std::size_t index = 0; index < pending.size(); ++index) {
-            expand(*pending[index].leaf, predictions[index]);
-            backpropagate(pending[index].path, predictions[index].value);
-        }
-        if (simulation == 0) {
-            for (std::size_t slot = 0; slot < positions.size(); ++slot) {
-                if (positions[slot]) addRootNoise(*m_roots[slot], seeds[slot]);
+            const int count = std::min(m_config.leavesPerBatch,
+                                       m_config.simulations - completed[slot]);
+            for (int leafIndex = 0; leafIndex < count; ++leafIndex) {
+                PendingLeaf leaf = selectLeaf(*m_roots[slot]);
+                if (leaf.leaf->pending) break;
+                if (leaf.leaf->position.isTerminal()) {
+                    backpropagate(leaf.path, terminalValue(leaf.leaf->position));
+                } else {
+                    reservePath(leaf.path, m_config.virtualLoss);
+                    leaf.leaf->pending = true;
+                    inferencePositions.push_back(leaf.leaf->position.fork());
+                    pending.push_back(std::move(leaf));
+                }
+                ++completed[slot];
+                ++m_statistics.simulations;
+                progressed = true;
             }
         }
+        if (!inferencePositions.empty()) {
+            // 跨局与单局多叶共同组成动态 batch，推理后先撤销 virtual loss。
+            const auto predictions = m_evaluator.evaluate(inferencePositions);
+            if (predictions.size() != pending.size()) {
+                throw std::runtime_error("评估器返回数量与叶节点不一致");
+            }
+            ++m_statistics.inferenceBatches;
+            m_statistics.inferencePositions += predictions.size();
+            m_statistics.maxInferenceBatch = std::max<std::uint64_t>(
+                m_statistics.maxInferenceBatch, predictions.size());
+            for (std::size_t index = 0; index < pending.size(); ++index) {
+                releasePath(pending[index].path, m_config.virtualLoss);
+                pending[index].leaf->pending = false;
+                expand(*pending[index].leaf, predictions[index]);
+                backpropagate(pending[index].path, predictions[index].value);
+            }
+        }
+        for (std::size_t slot = 0; slot < positions.size(); ++slot) {
+            if (positions[slot] && !noiseApplied[slot] && m_roots[slot]->expanded) {
+                addRootNoise(*m_roots[slot], seeds[slot]);
+                noiseApplied[slot] = true;
+            }
+        }
+        bool done = true;
+        for (std::size_t slot = 0; slot < positions.size(); ++slot) {
+            if (positions[slot] && completed[slot] != m_config.simulations) {
+                done = false;
+                break;
+            }
+        }
+        if (done) break;
+        if (!progressed) throw std::runtime_error("PUCT 多叶批处理没有取得进展");
     }
 
     std::vector<std::optional<PuctResult>> results(positions.size());

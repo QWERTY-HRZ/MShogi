@@ -114,6 +114,30 @@ TEST(GameAgentTest, PuctBatchesLeavesAndReusesSelectedTree) {
     EXPECT_EQ(search.statistics().treeReuseHits, 1U);
 }
 
+TEST(GameAgentTest, PuctVirtualLossBatchesMultipleLeavesWithoutLeakingVisits) {
+    FakePolicyValueEvaluator evaluator;
+    PuctConfig config;
+    config.simulations = 16;
+    config.leavesPerBatch = 4;
+    config.virtualLoss = 1.0;
+    config.dirichletEpsilon = 0.0;
+    PuctBatchSearch search(evaluator, config, 1);
+    GameCore core;
+    const auto results = search.search({&core}, {20260912}, {0.0});
+    ASSERT_TRUE(results[0].has_value());
+    EXPECT_EQ(results[0]->rootVisits, config.simulations);
+    int childVisits = 0;
+    for (const ActionVisit& action : results[0]->actionVisits) {
+        EXPECT_GE(action.visits, 0);
+        childVisits += action.visits;
+    }
+    // 根首次展开自身占一次访问，其余模拟必须全部落到子节点。
+    EXPECT_EQ(childVisits + 1, results[0]->rootVisits);
+    EXPECT_GE(search.statistics().maxInferenceBatch, 2U);
+    EXPECT_LT(search.statistics().inferenceBatches,
+              search.statistics().inferencePositions);
+}
+
 TEST(GameAgentTest, OnnxAgentLoadsDeployedModelAndReturnsLegalAction) {
     GameCore core;
     OnnxAgent agent(MSHOGI_TEST_ONNX_RUNTIME, MSHOGI_TEST_ONNX_MODEL);

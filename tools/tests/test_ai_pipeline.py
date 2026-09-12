@@ -18,6 +18,7 @@ from mshogi_ai.data import (
 from mshogi_ai.model import MShogiNet, ModelConfig, policy_value_loss
 from run_onnx_arena import promotion_eligible, wilson_interval
 from manage_replay_buffer import add_shards
+from manage_replay_pool import update_pool
 
 
 def sample_state() -> str:
@@ -164,6 +165,7 @@ def test_versioned_replay_buffer_is_idempotent(tmp_path) -> None:
         "core_commit": "test", "model_sha256": model_hash, "seed": 7,
         "games": 1, "simulations": 4, "c_puct": 1.5,
         "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25,
+        "leaves_per_batch": 4, "virtual_loss": 1.0,
     }
     position = {
         "record_type": "position", "game_id": 0, "ply": 0, "player": "S",
@@ -184,3 +186,28 @@ def test_versioned_replay_buffer_is_idempotent(tmp_path) -> None:
     second = add_shards(tmp_path / "buffer", [shard], model_manifest)
     assert first["totals"] == {"shards": 1, "games": 1, "positions": 1}
     assert second["totals"] == first["totals"]
+
+
+def test_replay_pool_evicts_whole_old_generations(tmp_path) -> None:
+    def generation(name: str, digest: str, positions: int) -> dict[str, object]:
+        return {
+            "name": name, "weight": 1.0, "added_at": name,
+            "model_sha256": digest, "model_manifest": f"{name}.json",
+            "search": {"simulations": 64},
+            "shards": [{
+                "path": f"{name}.jsonl.gz", "sha256": digest,
+                "core_commit": "test", "seed": positions,
+                "games": 10, "positions": positions,
+            }],
+        }
+
+    pool = tmp_path / "pool"
+    first = generation("g1", "1" * 64, 80)
+    update_pool(pool, first, max_generations=2, max_positions=200)
+    idempotent = update_pool(pool, first, max_generations=2, max_positions=200)
+    assert idempotent["totals"]["generations"] == 1
+    update_pool(pool, generation("g2", "2" * 64, 80), 2, 200)
+    final = update_pool(pool, generation("g3", "3" * 64, 80), 2, 200)
+    assert [item["name"] for item in final["generations"]] == ["g2", "g3"]
+    assert final["totals"]["evicted"] == ["g1"]
+    assert sum(item["normalized_weight"] for item in final["generations"]) == 1.0

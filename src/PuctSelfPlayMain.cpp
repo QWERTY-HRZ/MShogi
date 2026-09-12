@@ -18,6 +18,7 @@ void printUsage() {
     std::cout << "Usage: mshogi_puct_selfplay --runtime PATH --model PATH "
                  "--model-sha256 HASH [options]\n"
               << "  --games N --output PATH --seed N --simulations N\n"
+              << "  --leaves-per-batch N --virtual-loss X\n"
               << "  --c-puct X --dirichlet-alpha X --dirichlet-epsilon X\n"
               << "  --temperature X --temperature-plies N --max-plies N\n";
 }
@@ -37,6 +38,8 @@ int main(int argc, char* argv[]) {
             else if (option == "--model-sha256") config.modelSha256 = requireValue(index, argc, argv);
             else if (option == "--seed") config.seed = std::stoull(requireValue(index, argc, argv));
             else if (option == "--simulations") config.search.simulations = std::stoi(requireValue(index, argc, argv));
+            else if (option == "--leaves-per-batch") config.search.leavesPerBatch = std::stoi(requireValue(index, argc, argv));
+            else if (option == "--virtual-loss") config.search.virtualLoss = std::stod(requireValue(index, argc, argv));
             else if (option == "--c-puct") config.search.exploration = std::stod(requireValue(index, argc, argv));
             else if (option == "--dirichlet-alpha") config.search.dirichletAlpha = std::stod(requireValue(index, argc, argv));
             else if (option == "--dirichlet-epsilon") config.search.dirichletEpsilon = std::stod(requireValue(index, argc, argv));
@@ -56,6 +59,7 @@ int main(int argc, char* argv[]) {
                   << " simulations=" << summary.searchStatistics.simulations
                   << " inference_batches=" << summary.searchStatistics.inferenceBatches
                   << " inference_positions=" << summary.searchStatistics.inferencePositions
+                  << " max_inference_batch=" << summary.searchStatistics.maxInferenceBatch
                   << " tree_reuse_hits=" << summary.searchStatistics.treeReuseHits
                   << " seconds=" << summary.elapsedSeconds
                   << " output=" << config.outputPath.string() << '\n';

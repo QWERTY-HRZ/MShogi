@@ -32,14 +32,19 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--games", type=int, default=1000)
     parser.add_argument("--simulations", type=int, default=64)
+    parser.add_argument("--leaves-per-batch", type=int, default=8)
+    parser.add_argument("--virtual-loss", type=float, default=1.0)
     parser.add_argument("--c-puct", type=float, default=1.5)
     parser.add_argument("--opening-plies", type=int, default=6)
     parser.add_argument("--max-plies", type=int, default=200)
     parser.add_argument("--seed", type=int, default=20260912)
+    parser.add_argument("--stage", choices=("proof", "screening", "promotion"),
+                        default="promotion")
     parser.add_argument("--min-score-rate", type=float, default=0.55)
     parser.add_argument("--min-wilson-lower", type=float, default=0.50)
     args = parser.parse_args()
-    if args.games <= 0 or args.games % 2 or args.simulations < 2:
+    if (args.games <= 0 or args.games % 2 or args.simulations < 2 or
+            args.leaves_per_batch <= 0 or args.virtual_loss < 0.0):
         raise ValueError("games must be positive/even and simulations must be at least two")
 
     candidate_manifest = verify_model(args.candidate.resolve(),
@@ -51,6 +56,8 @@ def main() -> int:
         "--candidate", str(args.candidate.resolve()),
         "--champion", str(args.champion.resolve()), "--games", str(args.games),
         "--simulations", str(args.simulations), "--c-puct", str(args.c_puct),
+        "--leaves-per-batch", str(args.leaves_per_batch),
+        "--virtual-loss", str(args.virtual_loss),
         "--opening-plies", str(args.opening_plies),
         "--max-plies", str(args.max_plies), "--seed", str(args.seed),
     ]
@@ -68,7 +75,9 @@ def main() -> int:
         fields = line.split("\t")
         if fields[0] == "M":
             arena_commit = fields[1]
-            if fields[2] != RULE_VERSION or int(fields[3]) != args.simulations:
+            if (fields[2] != RULE_VERSION or int(fields[3]) != args.simulations or
+                    int(fields[4]) != args.leaves_per_batch or
+                    float(fields[5]) != args.virtual_loss):
                 raise RuntimeError("PUCT arena metadata mismatch")
         elif fields[0] == "O":
             openings[int(fields[1])] = hashlib.sha256(fields[2].encode()).hexdigest().upper()
@@ -91,6 +100,7 @@ def main() -> int:
             search_stats[fields[1]] = {
                 "simulations": int(fields[2]), "inference_batches": int(fields[3]),
                 "inference_positions": int(fields[4]), "tree_reuse_hits": int(fields[5]),
+                "max_inference_batch": int(fields[6]),
             }
         elif fields[0] != "D":
             raise RuntimeError(f"unknown PUCT arena record: {fields[0]}")
@@ -102,10 +112,17 @@ def main() -> int:
     decisive = counts["win"] + counts["loss"]
     score_rate = (counts["win"] + 0.5 * counts["draw"]) / max(completed, 1)
     interval = wilson_interval(counts["win"], decisive)
-    eligible = promotion_eligible(
+    required_games = 200 if args.stage == "screening" else 1000
+    eligible = args.stage != "proof" and promotion_eligible(
         args.games, counts["truncated"], score_rate, interval[0],
-        args.min_score_rate, args.min_wilson_lower,
+        args.min_score_rate, args.min_wilson_lower, required_games,
     )
+    decisions = {
+        "screening": ("advance_to_promotion", "reject_candidate"),
+        "promotion": ("promote_candidate", "retain_champion"),
+    }
+    decision = ("proof_complete" if args.stage == "proof" else
+                decisions[args.stage][0] if eligible else decisions[args.stage][1])
     pair_points: Counter[str] = Counter()
     for pair_id in range(args.games // 2):
         pair = [item for item in results if item["pair_id"] == pair_id]
@@ -120,7 +137,9 @@ def main() -> int:
     summary = {
         "arena_commit": arena_commit, "rule_version": RULE_VERSION,
         "games": args.games, "pairs": args.games // 2, "seed": args.seed,
-        "search": {"simulations": args.simulations, "c_puct": args.c_puct,
+        "search": {"simulations": args.simulations,
+                   "leaves_per_batch": args.leaves_per_batch,
+                   "virtual_loss": args.virtual_loss, "c_puct": args.c_puct,
                    "dirichlet_epsilon": 0.0, "temperature": 0.0},
         "opening_plies": args.opening_plies, "max_plies": args.max_plies,
         "unique_openings": len(set(openings.values())),
@@ -135,12 +154,13 @@ def main() -> int:
                     "score_rate": score_rate, "decisive_wilson95": interval,
                     "paired_points": dict(pair_points)},
         "promotion_gate": {
-            "production_games": 1000,
+            "stage": args.stage,
+            "required_games": required_games,
             "min_score_rate": args.min_score_rate,
             "min_decisive_wilson_lower": args.min_wilson_lower,
-            "sample_size_met": args.games >= 1000,
-            "decision": "promote_candidate" if eligible else "retain_champion",
-            "proof_only": args.games < 1000,
+            "sample_size_met": args.games >= required_games,
+            "decision": decision,
+            "proof_only": args.stage == "proof" or args.games < required_games,
         },
         "elapsed_seconds": time.perf_counter() - started,
     }

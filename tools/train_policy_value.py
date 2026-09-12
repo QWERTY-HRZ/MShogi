@@ -51,6 +51,49 @@ def resolve_paths(patterns: list[str]) -> list[Path]:
     return sorted(paths)
 
 
+def load_replay_pool(path: Path, split_seed: int, mix_seed: int):
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    generations = manifest.get("generations", [])
+    if not generations:
+        raise ValueError("replay pool has no generations")
+    loaded = []
+    all_shards = []
+    all_paths: list[Path] = []
+    game_counts = {"train": 0, "validation": 0, "test": 0}
+    for generation in generations:
+        paths = [Path(item["path"]).resolve() for item in generation["shards"]]
+        splits, shards, counts = load_split_samples(paths, split_seed)
+        loaded.append((generation, splits))
+        all_shards.extend(shards)
+        all_paths.extend(paths)
+        for name in game_counts:
+            game_counts[name] += counts[name]
+
+    mixed = {"train": [], "validation": [], "test": []}
+    report: dict[str, object] = {"manifest": str(path.resolve()), "splits": {}}
+    for split_index, split_name in enumerate(mixed):
+        weights = [float(item[0]["normalized_weight"]) for item in loaded]
+        if any(not item[1][split_name] for item in loaded):
+            raise ValueError(f"every replay generation needs {split_name} samples")
+        scale = min(len(item[1][split_name]) / weight
+                    for item, weight in zip(loaded, weights, strict=True))
+        split_report = []
+        for generation_index, ((generation, splits), weight) in enumerate(
+                zip(loaded, weights, strict=True)):
+            count = max(1, min(len(splits[split_name]), int(scale * weight)))
+            samples = list(splits[split_name])
+            random.Random(mix_seed + split_index * 1009 + generation_index).shuffle(samples)
+            mixed[split_name].extend(samples[:count])
+            split_report.append({
+                "generation": generation["name"], "weight": weight,
+                "available": len(samples), "selected": count,
+            })
+        random.Random(mix_seed + split_index * 7919).shuffle(mixed[split_name])
+        report["splits"][split_name] = split_report
+    # 每个 split 独立按权重下采样，避免较长对局的一代支配训练。
+    return mixed, all_shards, game_counts, sorted(set(all_paths)), report
+
+
 def set_reproducible_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -172,8 +215,10 @@ def run_loader(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Train the Mixed-Shogi policy-value baseline")
-    parser.add_argument("--data", nargs="+", required=True,
+    parser.add_argument("--data", nargs="+",
                         help="self-play shard paths or glob patterns")
+    parser.add_argument("--replay-pool", type=Path,
+                        help="weighted multi-generation replay pool manifest")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=256)
@@ -200,6 +245,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.epochs <= 0 or args.batch_size <= 0:
         raise ValueError("epochs and batch size must be positive")
+    if bool(args.data) == bool(args.replay_pool):
+        raise ValueError("provide exactly one of --data or --replay-pool")
     if args.patience < 0:
         raise ValueError("patience must be non-negative")
 
@@ -215,8 +262,14 @@ def main() -> int:
     if args.amp_bf16 and device.type != "cuda":
         raise ValueError("--amp-bf16 requires CUDA")
 
-    paths = resolve_paths(args.data)
-    split_samples, shards, split_game_counts = load_split_samples(paths, args.split_seed)
+    replay_mix = None
+    if args.replay_pool:
+        split_samples, shards, split_game_counts, paths, replay_mix = load_replay_pool(
+            args.replay_pool.resolve(), args.split_seed, args.seed
+        )
+    else:
+        paths = resolve_paths(args.data)
+        split_samples, shards, split_game_counts = load_split_samples(paths, args.split_seed)
     if args.max_samples_per_split > 0:
         split_samples = {
             name: samples[:args.max_samples_per_split]
@@ -291,6 +344,7 @@ def main() -> int:
         "games": split_game_counts,
         "positions": position_counts,
         "effective_train_samples": len(datasets["train"]),
+        "replay_mix": replay_mix,
         "shards": [
             {
                 "path": str(shard.path),

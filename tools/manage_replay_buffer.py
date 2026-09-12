@@ -12,12 +12,16 @@ from mshogi_ai.data import ACTION_COUNT, RULE_VERSION, load_shard, sha256_file
 IDENTITY_FIELDS = (
     "format_version", "rule_version", "action_count", "policy_target",
     "replay_buffer_version", "model_sha256", "simulations", "c_puct",
-    "dirichlet_alpha", "dirichlet_epsilon",
+    "dirichlet_alpha", "dirichlet_epsilon", "leaves_per_batch", "virtual_loss",
 )
 
 
 def replay_identity(metadata: dict[str, object]) -> dict[str, object]:
-    identity = {name: metadata.get(name) for name in IDENTITY_FIELDS}
+    normalized = metadata | {
+        "leaves_per_batch": metadata.get("leaves_per_batch", 1),
+        "virtual_loss": metadata.get("virtual_loss", 0.0),
+    }
+    identity = {name: normalized.get(name) for name in IDENTITY_FIELDS}
     if identity != identity | {
         "format_version": 3,
         "rule_version": RULE_VERSION,
@@ -51,8 +55,10 @@ def add_shards(buffer_directory: Path, shard_paths: list[Path],
     manifest_path = buffer_directory / "buffer_manifest.json"
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest["identity"] != identities[0]:
+        existing_identity = replay_identity(manifest["identity"])
+        if existing_identity != identities[0]:
             raise ValueError("new shard is incompatible with this replay buffer version")
+        manifest["identity"] = existing_identity
     else:
         manifest = {
             "manifest_version": 1,
