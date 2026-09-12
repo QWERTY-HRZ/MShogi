@@ -19,6 +19,7 @@ from mshogi_ai.model import MShogiNet, ModelConfig, policy_value_loss
 from run_onnx_arena import promotion_eligible, wilson_interval
 from manage_replay_buffer import add_shards
 from manage_replay_pool import update_pool
+from promote_puct_champion import validate_arena
 
 
 def sample_state() -> str:
@@ -211,3 +212,36 @@ def test_replay_pool_evicts_whole_old_generations(tmp_path) -> None:
     assert [item["name"] for item in final["generations"]] == ["g2", "g3"]
     assert final["totals"]["evicted"] == ["g1"]
     assert sum(item["normalized_weight"] for item in final["generations"]) == 1.0
+
+
+def test_promotion_evidence_accepts_unordered_games_and_rejects_bad_pairs(tmp_path) -> None:
+    games = []
+    for pair_id in range(500):
+        games.extend([
+            {"game_id": pair_id * 2, "pair_id": pair_id,
+             "candidate_side": "S", "winner": 1, "truncated": False,
+             "candidate_result": "win", "opening_sha256": str(pair_id)},
+            {"game_id": pair_id * 2 + 1, "pair_id": pair_id,
+             "candidate_side": "G", "winner": 2, "truncated": False,
+             "candidate_result": "win", "opening_sha256": str(pair_id)},
+        ])
+    games.reverse()
+    games_path = tmp_path / "games.jsonl"
+    games_path.write_text("".join(json.dumps(game) + "\n" for game in games),
+                          encoding="utf-8")
+    summary = {
+        "games": 1000, "pairs": 500,
+        "results": {"wins": 1000, "draws": 0, "losses": 0, "truncated": 0,
+                    "score_rate": 1.0, "decisive_wilson95": wilson_interval(1000, 1000)},
+        "promotion_gate": {"stage": "promotion", "decision": "promote_candidate",
+                           "required_games": 1000, "min_score_rate": 0.55,
+                           "min_decisive_wilson_lower": 0.50},
+    }
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+    validate_arena(summary_path)
+    games[-1]["opening_sha256"] = "tampered"
+    games_path.write_text("".join(json.dumps(game) + "\n" for game in games),
+                          encoding="utf-8")
+    with np.testing.assert_raises(ValueError):
+        validate_arena(summary_path)
