@@ -186,6 +186,8 @@ def main() -> int:
     parser.add_argument("--value-discount", type=float, default=1.0)
     parser.add_argument("--channels", type=int, default=64)
     parser.add_argument("--residual-blocks", type=int, default=6)
+    parser.add_argument("--initial-checkpoint", type=Path,
+                        help="continue from the current champion checkpoint")
     parser.add_argument("--seed", type=int, default=20260911)
     parser.add_argument("--split-seed", type=int, default=20260911)
     parser.add_argument("--num-workers", type=int, default=0)
@@ -246,6 +248,18 @@ def main() -> int:
         channels=args.channels, residual_blocks=args.residual_blocks
     )
     model = MShogiNet(model_config).to(device)
+    initial_checkpoint_path = (
+        args.initial_checkpoint.resolve() if args.initial_checkpoint else None
+    )
+    if initial_checkpoint_path:
+        initial = torch.load(initial_checkpoint_path, map_location=device,
+                             weights_only=False)
+        if initial.get("rule_version") != RULE_VERSION:
+            raise ValueError("initial checkpoint rule version is incompatible")
+        if initial.get("model_config") != model_config.to_dict():
+            raise ValueError("initial checkpoint architecture is incompatible")
+        # 强化候选从当前冠军继续学习，避免小批 replay 将网络随机重置。
+        model.load_state_dict(initial["model_state"])
     source_commit = training_commit()
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
@@ -269,6 +283,11 @@ def main() -> int:
         "device": str(device),
         "model": model_config.to_dict(),
         "parameters": count_parameters(model),
+        "initial_checkpoint": (
+            {"path": str(initial_checkpoint_path),
+             "sha256": sha256_file(initial_checkpoint_path)}
+            if initial_checkpoint_path else None
+        ),
         "games": split_game_counts,
         "positions": position_counts,
         "effective_train_samples": len(datasets["train"]),

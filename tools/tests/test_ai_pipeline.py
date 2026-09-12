@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import gzip
+import json
+
 import numpy as np
 import torch
 
@@ -10,9 +13,11 @@ from mshogi_ai.data import (
     parse_state,
     rotate_action_id,
     teacher_policy,
+    visit_policy,
 )
 from mshogi_ai.model import MShogiNet, ModelConfig, policy_value_loss
 from run_onnx_arena import wilson_interval
+from manage_replay_buffer import add_shards
 
 
 def sample_state() -> str:
@@ -93,6 +98,22 @@ def test_terminal_distance_weights_and_truncation_mask() -> None:
     assert truncated["value_weight"] == 0.0
 
 
+def test_puct_visits_are_normalized_without_softmax() -> None:
+    target = visit_policy(((10, 1.0), (20, 3.0), (30, 0.0)))
+    assert np.isclose(target.sum(), 1.0)
+    assert target[10] == 0.25
+    assert target[20] == 0.75
+    assert target[30] == 0.0
+
+    position = PositionRecord(
+        0, 0, "S", sample_state(), ((677, 1.0), (833, 3.0)), 833, 1,
+        "puct_visit_counts",
+    )
+    sample = MShogiDataset((TrainingSample(position, False, 1, "king_captured"),))[0]
+    assert torch.isclose(sample["policy_target"][677].float(), torch.tensor(0.25))
+    assert torch.isclose(sample["policy_target"][833].float(), torch.tensor(0.75))
+
+
 def test_policy_value_network_shapes_and_masked_loss() -> None:
     model = MShogiNet(ModelConfig(channels=16, residual_blocks=2))
     board = torch.zeros((3, 10, 6, 5))
@@ -123,3 +144,37 @@ def test_wilson_interval_handles_empty_and_extreme_results() -> None:
     lower, upper = wilson_interval(100, 100)
     assert 0.96 < lower < 0.97
     assert upper == 1.0
+
+
+def test_versioned_replay_buffer_is_idempotent(tmp_path) -> None:
+    model_hash = "A" * 64
+    model_manifest = tmp_path / "model.json"
+    model_manifest.write_text(json.dumps({"onnx_sha256": model_hash}), encoding="utf-8")
+    shard = tmp_path / "puct.jsonl.gz"
+    metadata = {
+        "record_type": "metadata", "format": "mshogi-selfplay-jsonl-gzip",
+        "format_version": 3, "rule_version": "v1.11.0", "action_count": 990,
+        "policy_target": "puct_visit_counts", "replay_buffer_version": 1,
+        "core_commit": "test", "model_sha256": model_hash, "seed": 7,
+        "games": 1, "simulations": 4, "c_puct": 1.5,
+        "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25,
+    }
+    position = {
+        "record_type": "position", "game_id": 0, "ply": 0, "player": "S",
+        "state": sample_state(), "temperature": 1.0, "selection_seed": 9,
+        "root_visits": 4, "tree_reused": False,
+        "legal_actions": [[677, 1], [833, 2]], "selected_action": 833,
+        "outcome": 1,
+    }
+    ending = {
+        "record_type": "game_end", "game_id": 0, "plies": 1, "winner": 1,
+        "end_reason": "king_captured", "truncated": False,
+    }
+    with gzip.open(shard, "wt", encoding="utf-8") as stream:
+        for record in (metadata, position, ending):
+            stream.write(json.dumps(record) + "\n")
+
+    first = add_shards(tmp_path / "buffer", [shard], model_manifest)
+    second = add_shards(tmp_path / "buffer", [shard], model_manifest)
+    assert first["totals"] == {"shards": 1, "games": 1, "positions": 1}
+    assert second["totals"] == first["totals"]

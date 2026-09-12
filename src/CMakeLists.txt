@@ -74,6 +74,44 @@ target_link_libraries(mshogi_replay_verify PRIVATE MShogiSelfPlay)
 
 add_executable(mshogi_arena ArenaMain.cpp)
 target_link_libraries(mshogi_arena PRIVATE MShogiSelfPlay)
+
+option(MSHOGI_ENABLE_ONNX_AGENT "Build the desktop policy-value agent" OFF)
+set(MSHOGI_ONNXRUNTIME_ROOT "" CACHE PATH "ONNX Runtime headers and DLL directory")
+set(MSHOGI_ONNX_MODEL "" CACHE FILEPATH "Policy-value ONNX model deployed with the app")
+
+if(MSHOGI_ENABLE_ONNX_AGENT)
+    if(NOT WIN32)
+        message(FATAL_ERROR "The dynamically loaded ONNX evaluator currently supports Windows")
+    endif()
+    if(NOT EXISTS "${MSHOGI_ONNXRUNTIME_ROOT}/include/onnxruntime_cxx_api.h" OR
+       NOT EXISTS "${MSHOGI_ONNXRUNTIME_ROOT}/onnxruntime.dll")
+        message(FATAL_ERROR "MSHOGI_ONNXRUNTIME_ROOT must contain headers and onnxruntime.dll")
+    endif()
+    if(NOT EXISTS "${MSHOGI_ONNX_MODEL}")
+        message(FATAL_ERROR "MSHOGI_ONNX_MODEL must point to the deployed model")
+    endif()
+    get_filename_component(MSHOGI_ONNX_MANIFEST "${MSHOGI_ONNX_MODEL}" DIRECTORY)
+    if(NOT EXISTS "${MSHOGI_ONNX_MANIFEST}/manifest.json")
+        message(FATAL_ERROR "The ONNX model directory must contain manifest.json")
+    endif()
+
+    add_library(MShogiPolicyValue STATIC
+        PolicyValueEvaluator.cpp
+        PuctSearch.cpp
+        PuctSelfPlay.cpp
+        ../include/PolicyValueEvaluator.h
+        ../include/PuctSearch.h
+        ../include/PuctSelfPlay.h
+    )
+    target_include_directories(MShogiPolicyValue PUBLIC ${PROJECT_SOURCE_DIR}/include
+        PRIVATE ${MSHOGI_ONNXRUNTIME_ROOT}/include)
+    target_link_libraries(MShogiPolicyValue PUBLIC MShogiSelfPlay)
+
+    add_executable(mshogi_puct_selfplay PuctSelfPlayMain.cpp)
+    target_link_libraries(mshogi_puct_selfplay PRIVATE MShogiPolicyValue)
+    add_executable(mshogi_puct_arena PuctArenaMain.cpp)
+    target_link_libraries(mshogi_puct_arena PRIVATE MShogiPolicyValue)
+endif()
 execute_process(
     COMMAND git rev-parse --short=12 HEAD
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
@@ -90,6 +128,14 @@ target_compile_definitions(mshogi_selfplay PRIVATE
 target_compile_definitions(mshogi_arena PRIVATE
     MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
 )
+if(MSHOGI_ENABLE_ONNX_AGENT)
+    target_compile_definitions(mshogi_puct_selfplay PRIVATE
+        MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
+    )
+    target_compile_definitions(mshogi_puct_arena PRIVATE
+        MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
+    )
+endif()
 
 if(NOT MSHOGI_BUILD_APP)
     return()
@@ -103,29 +149,10 @@ add_library(MShogiLib STATIC
     ${MSHOGI_RESOURCES}
 )
 
-option(MSHOGI_ENABLE_ONNX_AGENT "Build the desktop policy-value agent" OFF)
-set(MSHOGI_ONNXRUNTIME_ROOT "" CACHE PATH "ONNX Runtime headers and DLL directory")
-set(MSHOGI_ONNX_MODEL "" CACHE FILEPATH "Policy-value ONNX model deployed with the app")
-
 if(MSHOGI_ENABLE_ONNX_AGENT)
-    if(NOT WIN32)
-        message(FATAL_ERROR "The dynamically loaded ONNX agent currently supports Windows")
-    endif()
-    if(NOT EXISTS "${MSHOGI_ONNXRUNTIME_ROOT}/include/onnxruntime_cxx_api.h" OR
-       NOT EXISTS "${MSHOGI_ONNXRUNTIME_ROOT}/onnxruntime.dll")
-        message(FATAL_ERROR "MSHOGI_ONNXRUNTIME_ROOT must contain headers and onnxruntime.dll")
-    endif()
-    if(NOT EXISTS "${MSHOGI_ONNX_MODEL}")
-        message(FATAL_ERROR "MSHOGI_ONNX_MODEL must point to the deployed model")
-    endif()
-    get_filename_component(MSHOGI_ONNX_MANIFEST "${MSHOGI_ONNX_MODEL}" DIRECTORY)
-    if(NOT EXISTS "${MSHOGI_ONNX_MANIFEST}/manifest.json")
-        message(FATAL_ERROR "The ONNX model directory must contain manifest.json")
-    endif()
     target_sources(MShogiLib PRIVATE OnnxAgent.cpp ../include/OnnxAgent.h)
-    target_include_directories(MShogiLib PRIVATE ${MSHOGI_ONNXRUNTIME_ROOT}/include)
     target_compile_definitions(MShogiLib PUBLIC MSHOGI_WITH_ONNX_AGENT=1)
-    target_link_libraries(MShogiLib PRIVATE MShogiSelfPlay)
+    target_link_libraries(MShogiLib PRIVATE MShogiPolicyValue)
 endif()
 
 target_include_directories(MShogiLib PUBLIC ${PROJECT_SOURCE_DIR}/include)

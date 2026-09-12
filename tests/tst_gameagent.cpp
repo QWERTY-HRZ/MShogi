@@ -4,6 +4,7 @@
 #include "SelfPlay.h"
 #ifdef MSHOGI_WITH_ONNX_AGENT
 #include "OnnxAgent.h"
+#include "PuctSearch.h"
 #endif
 
 TEST(GameAgentTest, BaselineReturnsALegalInitialAction) {
@@ -66,6 +67,53 @@ TEST(GameAgentTest, DrawHasNeutralValueForBothPlayers) {
 }
 
 #ifdef MSHOGI_WITH_ONNX_AGENT
+namespace {
+class FakePolicyValueEvaluator final : public PolicyValueEvaluator {
+public:
+    std::vector<PolicyValuePrediction> evaluate(
+        const std::vector<GameCore>& positions) const override {
+        batchSizes.push_back(positions.size());
+        std::vector<PolicyValuePrediction> predictions(positions.size());
+        for (std::size_t index = 0; index < positions.size(); ++index) {
+            for (const Move& move : positions[index].legalActions()) {
+                predictions[index].policyLogits[encodeAction(move)] =
+                    static_cast<float>(encodeAction(move)) / 990.0f;
+            }
+        }
+        return predictions;
+    }
+
+    mutable std::vector<std::size_t> batchSizes;
+};
+}
+
+TEST(GameAgentTest, PuctBatchesLeavesAndReusesSelectedTree) {
+    FakePolicyValueEvaluator evaluator;
+    PuctConfig config;
+    config.simulations = 4;
+    config.dirichletEpsilon = 0.0;
+    PuctBatchSearch search(evaluator, config, 2);
+    GameCore first;
+    GameCore second;
+    const std::vector<const GameCore*> positions{&first, &second};
+    const auto results = search.search(positions, {11, 12}, {0.0, 0.0});
+    ASSERT_TRUE(results[0].has_value());
+    ASSERT_TRUE(results[1].has_value());
+    EXPECT_TRUE(first.isLegalAction(results[0]->selectedAction));
+    EXPECT_TRUE(second.isLegalAction(results[1]->selectedAction));
+    EXPECT_EQ(results[0]->rootVisits, config.simulations);
+    EXPECT_EQ(evaluator.batchSizes.front(), 2U);
+    EXPECT_EQ(search.statistics().inferencePositions, 8U);
+
+    const Move selected = results[0]->selectedAction;
+    ASSERT_TRUE(first.applyAction(selected));
+    search.advance(0, selected, first);
+    const auto reused = search.search({&first, nullptr}, {13, 0}, {0.0, 0.0});
+    ASSERT_TRUE(reused[0].has_value());
+    EXPECT_TRUE(reused[0]->reusedTree);
+    EXPECT_EQ(search.statistics().treeReuseHits, 1U);
+}
+
 TEST(GameAgentTest, OnnxAgentLoadsDeployedModelAndReturnsLegalAction) {
     GameCore core;
     OnnxAgent agent(MSHOGI_TEST_ONNX_RUNTIME, MSHOGI_TEST_ONNX_MODEL);

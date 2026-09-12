@@ -26,7 +26,9 @@ def inspect(path: Path) -> dict[str, object]:
                     raise ValueError("first record must be metadata")
                 metadata = record
                 version_pair = (int(record.get("format_version", -1)), record.get("rule_version"))
-                if version_pair not in {(1, "v1.10.0"), (2, "v1.11.0")}:
+                if version_pair not in {
+                    (1, "v1.10.0"), (2, "v1.11.0"), (3, "v1.11.0")
+                }:
                     raise ValueError("unsupported format/rule version pair")
                 if int(record.get("action_count", -1)) != 990:
                     raise ValueError("unexpected action count")
@@ -48,6 +50,12 @@ def inspect(path: Path) -> dict[str, object]:
                     raise ValueError(f"invalid outcome at line {line_number}")
                 if float(record["temperature"]) < 0 or int(record["selection_seed"]) < 0:
                     raise ValueError(f"invalid selection metadata at line {line_number}")
+                if int(metadata["format_version"]) == 3:
+                    visit_sum = sum(int(action[1]) for action in legal_actions)
+                    if visit_sum <= 0 or int(record.get("root_visits", -1)) != visit_sum + 1:
+                        raise ValueError(f"invalid PUCT visits at line {line_number}")
+                    if not isinstance(record.get("tree_reused"), bool):
+                        raise ValueError(f"invalid tree reuse flag at line {line_number}")
                 game_ids.add(int(record["game_id"]))
             elif record_type == "game_end":
                 winner = int(record["winner"])
@@ -85,6 +93,8 @@ def inspect(path: Path) -> dict[str, object]:
         "rule_version": metadata["rule_version"],
         "core_commit": metadata["core_commit"],
         "seed": metadata["seed"],
+        "policy_target": metadata.get("policy_target", "teacher_scores"),
+        "model_sha256": metadata.get("model_sha256"),
         "games": counts["game_end"],
         "positions": counts["position"],
         "sente_wins": winners[1],

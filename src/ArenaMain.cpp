@@ -30,6 +30,7 @@ struct Config {
     int maxPlies = 200;
     int threads = 1;
     std::uint64_t seed = 1;
+    bool dualNeural = false;
 };
 
 struct NeuralResponse {
@@ -134,6 +135,7 @@ int main(int argc, char* argv[]) {
             else if (option == "--max-plies") config.maxPlies = std::stoi(requireValue(index, argc, argv));
             else if (option == "--threads") config.threads = std::stoi(requireValue(index, argc, argv));
             else if (option == "--seed") config.seed = std::stoull(requireValue(index, argc, argv));
+            else if (option == "--dual-neural") config.dualNeural = true;
             else throw std::invalid_argument("unknown option: " + option);
         }
         if (config.games <= 0 || config.games % 2 != 0 || config.alphaBetaDepth <= 0 ||
@@ -171,9 +173,11 @@ int main(int argc, char* argv[]) {
             }
 
             std::vector<std::size_t> alphaBetaGames;
-            for (std::size_t index = 0; index < games.size(); ++index) {
-                if (!finished(games[index], config.maxPlies) && !neuralTurn(games[index])) {
-                    alphaBetaGames.push_back(index);
+            if (!config.dualNeural) {
+                for (std::size_t index = 0; index < games.size(); ++index) {
+                    if (!finished(games[index], config.maxPlies) && !neuralTurn(games[index])) {
+                        alphaBetaGames.push_back(index);
+                    }
                 }
             }
             std::vector<std::optional<Move>> alphaBetaMoves(alphaBetaGames.size());
@@ -203,7 +207,8 @@ int main(int argc, char* argv[]) {
             reportFinished(games, config.maxPlies);
             std::vector<std::size_t> neuralGames;
             for (std::size_t index = 0; index < games.size(); ++index) {
-                if (!finished(games[index], config.maxPlies) && neuralTurn(games[index])) {
+                if (!finished(games[index], config.maxPlies) &&
+                    (config.dualNeural || neuralTurn(games[index]))) {
                     neuralGames.push_back(index);
                 }
             }
@@ -212,8 +217,12 @@ int main(int argc, char* argv[]) {
             std::cout << "B\t" << neuralGames.size() << '\n';
             for (const std::size_t index : neuralGames) {
                 const auto actions = games[index].core.legalActions();
-                std::cout << "P\t" << index << '\t'
-                          << playerName(games[index].core.currentPlayer()) << '\t'
+                std::cout << "P\t" << index << '\t';
+                if (config.dualNeural) {
+                    // C/H 标记候选与冠军，保持同一 C++ 核心内的直接对局。
+                    std::cout << (neuralTurn(games[index]) ? 'C' : 'H') << '\t';
+                }
+                std::cout << playerName(games[index].core.currentPlayer()) << '\t'
                           << games[index].core.serializeState() << '\t';
                 for (std::size_t action = 0; action < actions.size(); ++action) {
                     if (action != 0) std::cout << ',';

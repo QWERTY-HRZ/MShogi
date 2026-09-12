@@ -13,7 +13,8 @@ import torch
 from torch.utils.data import Dataset
 
 RULE_VERSION = "v1.11.0"
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
+SUPPORTED_FORMAT_VERSIONS = (2, 3)
 ACTION_COUNT = 990
 ROWS = 6
 COLS = 5
@@ -32,6 +33,7 @@ class PositionRecord:
     legal_actions: tuple[tuple[int, float], ...]
     selected_action: int
     outcome: int
+    policy_source: str = "teacher_scores"
 
 
 @dataclass(frozen=True)
@@ -87,12 +89,22 @@ def load_shard(path: Path | str) -> Shard:
                 metadata = record
                 _require(record.get("format") == "mshogi-selfplay-jsonl-gzip",
                          "unexpected data format")
-                _require(int(record.get("format_version", -1)) == FORMAT_VERSION,
-                         "training requires self-play format v2")
+                format_version = int(record.get("format_version", -1))
+                _require(format_version in SUPPORTED_FORMAT_VERSIONS,
+                         "training requires self-play format v2 or v3")
                 _require(record.get("rule_version") == RULE_VERSION,
                          "training requires rule v1.11.0")
                 _require(int(record.get("action_count", -1)) == ACTION_COUNT,
                          "unexpected action count")
+                if format_version == 3:
+                    _require(record.get("policy_target") == "puct_visit_counts",
+                             "format v3 requires PUCT visit-count targets")
+                    _require(int(record.get("replay_buffer_version", -1)) == 1,
+                             "unsupported replay buffer version")
+                    model_sha256 = str(record.get("model_sha256", ""))
+                    _require(len(model_sha256) == 64 and all(
+                        item in "0123456789abcdefABCDEF" for item in model_sha256
+                    ), "format v3 requires a model SHA-256")
                 continue
 
             _require(metadata is not None, "metadata is missing")
@@ -121,8 +133,23 @@ def load_shard(path: Path | str) -> Shard:
                          f"duplicate legal action at line {line_number}")
                 _require(all(0 <= action_id < ACTION_COUNT for action_id in action_ids),
                          f"action id out of range at line {line_number}")
+                policy_source = (
+                    "puct_visit_counts"
+                    if int(metadata["format_version"]) == 3 else "teacher_scores"
+                )
                 _require(all(math.isfinite(score) for _, score in actions),
-                         f"non-finite teacher score at line {line_number}")
+                         f"non-finite policy value at line {line_number}")
+                if policy_source == "puct_visit_counts":
+                    _require(all(score >= 0.0 and score.is_integer()
+                                 for _, score in actions),
+                             f"invalid PUCT visit count at line {line_number}")
+                    visit_sum = int(sum(score for _, score in actions))
+                    _require(visit_sum > 0,
+                             f"empty PUCT visit target at line {line_number}")
+                    _require(int(record.get("root_visits", -1)) == visit_sum + 1,
+                             f"PUCT root visit invariant failed at line {line_number}")
+                    _require(isinstance(record.get("tree_reused"), bool),
+                             f"tree reuse flag missing at line {line_number}")
                 selected_action = int(record["selected_action"])
                 _require(selected_action in set(action_ids),
                          f"selected action is illegal at line {line_number}")
@@ -130,7 +157,7 @@ def load_shard(path: Path | str) -> Shard:
                 _require(outcome in (-1, 0, 1),
                          f"invalid outcome at line {line_number}")
                 pending.append(PositionRecord(game_id, ply, player, state, actions,
-                                              selected_action, outcome))
+                                              selected_action, outcome, policy_source))
                 continue
 
             if record_type == "game_end":
@@ -177,7 +204,12 @@ def load_shard(path: Path | str) -> Shard:
 
 
 def _game_identity(shard: Shard, game_id: int) -> str:
-    return f"{shard.metadata['core_commit']}:{shard.metadata['seed']}:{game_id}"
+    if int(shard.metadata["format_version"]) == 2:
+        return f"{shard.metadata['core_commit']}:{shard.metadata['seed']}:{game_id}"
+    return (
+        f"v3:{shard.metadata['core_commit']}:{shard.metadata['model_sha256']}:"
+        f"{shard.metadata['seed']}:{game_id}"
+    )
 
 
 def _split_name(identity: str, seed: int) -> str:
@@ -278,6 +310,18 @@ def teacher_policy(actions: Sequence[tuple[int, float]], temperature: float) -> 
     return target
 
 
+def visit_policy(actions: Sequence[tuple[int, float]]) -> np.ndarray:
+    target = np.zeros(ACTION_COUNT, dtype=np.float32)
+    ids = np.asarray([item[0] for item in actions], dtype=np.int64)
+    visits = np.asarray([item[1] for item in actions], dtype=np.float64)
+    _require(np.all(visits >= 0.0) and np.all(visits == np.floor(visits)),
+             "PUCT visit counts must be non-negative integers")
+    _require(float(visits.sum()) > 0.0, "PUCT visit counts must not all be zero")
+    # PUCT 的监督目标就是搜索访问分布，不能再次 softmax。
+    target[ids] = (visits / visits.sum()).astype(np.float32)
+    return target
+
+
 def rotate_action_id(action_id: int) -> int:
     _require(0 <= action_id < ACTION_COUNT, "action id out of range")
     if action_id < 900:
@@ -327,8 +371,10 @@ class MShogiDataset(Dataset[dict[str, torch.Tensor]]):
             self.metas[index] = meta
             ids = [action_id for action_id, _ in position.legal_actions]
             self.legal_masks[index, ids] = True
-            self.policy_targets[index] = teacher_policy(
-                position.legal_actions, teacher_temperature
+            self.policy_targets[index] = (
+                visit_policy(position.legal_actions)
+                if position.policy_source == "puct_visit_counts"
+                else teacher_policy(position.legal_actions, teacher_temperature)
             )
             distance = max(0, sample.remaining_plies - 1)
             self.value_targets[index] = float(position.outcome) * value_discount ** distance
