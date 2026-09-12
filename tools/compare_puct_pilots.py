@@ -70,6 +70,10 @@ def main() -> int:
     parser.add_argument("--screen-s128", type=Path, required=True)
     parser.add_argument("--screen-mixed", type=Path, required=True)
     parser.add_argument("--promotion", type=Path, required=True)
+    parser.add_argument("--architecture-control", type=Path, required=True)
+    parser.add_argument("--architecture-expanded", type=Path, required=True)
+    parser.add_argument("--architecture-control-training", type=Path, required=True)
+    parser.add_argument("--architecture-expanded-training", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -95,6 +99,14 @@ def main() -> int:
     if (promotion["promotion_gate"]["decision"] != "promote_candidate" or
             promotion["candidate"]["sha256"] != selected["model_sha256"]):
         raise ValueError("formal promotion does not match the best screened candidate")
+    control_arena = read_json(args.architecture_control.resolve())
+    expanded_arena = read_json(args.architecture_expanded.resolve())
+    control_training = read_json(args.architecture_control_training.resolve())
+    expanded_training = read_json(args.architecture_expanded_training.resolve())
+    if (control_arena["seed"] != expanded_arena["seed"] or
+            control_arena["champion"]["sha256"] != expanded_arena["champion"]["sha256"] or
+            control_arena["search"] != expanded_arena["search"]):
+        raise ValueError("architecture candidates were not evaluated identically")
     report = {
         "report_version": 1,
         "generation": generations,
@@ -120,6 +132,28 @@ def main() -> int:
             "score_rate": promotion["results"]["score_rate"],
             "decisive_wilson95": promotion["results"]["decisive_wilson95"],
             "decision": promotion["promotion_gate"]["decision"],
+        },
+        "architecture": {
+            "control_64x6": {
+                "parameters": 944975,
+                "training_seconds": control_training["seconds"],
+                "test_policy_top1": control_training["test"]["policy_top1"],
+                "arena_score_rate": control_arena["results"]["score_rate"],
+                "arena_wilson95": control_arena["results"]["decisive_wilson95"],
+                "arena_seconds": control_arena["elapsed_seconds"],
+                "decision": control_arena["promotion_gate"]["decision"],
+            },
+            "expanded_96x8": {
+                "parameters": 1843663,
+                "training_seconds": expanded_training["seconds"],
+                "test_policy_top1": expanded_training["test"]["policy_top1"],
+                "arena_score_rate": expanded_arena["results"]["score_rate"],
+                "arena_wilson95": expanded_arena["results"]["decisive_wilson95"],
+                "arena_seconds": expanded_arena["elapsed_seconds"],
+                "decision": expanded_arena["promotion_gate"]["decision"],
+            },
+            "selected": "64x6",
+            "reason": "96x8 failed the 200-game screen and was slower",
         },
     }
     output = args.output.resolve()
