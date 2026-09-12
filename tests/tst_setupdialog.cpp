@@ -41,4 +41,9 @@ TEST(GameSetupDialogTest, HumanVersusAiSettingsAssignTheAiByDrawResult) {
     EXPECT_EQ(setup.aiIsSente, setup.sentePlayerName == "AI");
     EXPECT_GE(setup.aiDepth, 1);
     EXPECT_LE(setup.aiDepth, 3);
+#ifdef MSHOGI_WITH_ONNX_AGENT
+    EXPECT_TRUE(setup.useNeuralAi);
+#else
+    EXPECT_FALSE(setup.useNeuralAi);
+#endif
 }

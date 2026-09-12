@@ -103,6 +103,31 @@ add_library(MShogiLib STATIC
     ${MSHOGI_RESOURCES}
 )
 
+option(MSHOGI_ENABLE_ONNX_AGENT "Build the desktop policy-value agent" OFF)
+set(MSHOGI_ONNXRUNTIME_ROOT "" CACHE PATH "ONNX Runtime headers and DLL directory")
+set(MSHOGI_ONNX_MODEL "" CACHE FILEPATH "Policy-value ONNX model deployed with the app")
+
+if(MSHOGI_ENABLE_ONNX_AGENT)
+    if(NOT WIN32)
+        message(FATAL_ERROR "The dynamically loaded ONNX agent currently supports Windows")
+    endif()
+    if(NOT EXISTS "${MSHOGI_ONNXRUNTIME_ROOT}/include/onnxruntime_cxx_api.h" OR
+       NOT EXISTS "${MSHOGI_ONNXRUNTIME_ROOT}/onnxruntime.dll")
+        message(FATAL_ERROR "MSHOGI_ONNXRUNTIME_ROOT must contain headers and onnxruntime.dll")
+    endif()
+    if(NOT EXISTS "${MSHOGI_ONNX_MODEL}")
+        message(FATAL_ERROR "MSHOGI_ONNX_MODEL must point to the deployed model")
+    endif()
+    get_filename_component(MSHOGI_ONNX_MANIFEST "${MSHOGI_ONNX_MODEL}" DIRECTORY)
+    if(NOT EXISTS "${MSHOGI_ONNX_MANIFEST}/manifest.json")
+        message(FATAL_ERROR "The ONNX model directory must contain manifest.json")
+    endif()
+    target_sources(MShogiLib PRIVATE OnnxAgent.cpp ../include/OnnxAgent.h)
+    target_include_directories(MShogiLib PRIVATE ${MSHOGI_ONNXRUNTIME_ROOT}/include)
+    target_compile_definitions(MShogiLib PUBLIC MSHOGI_WITH_ONNX_AGENT=1)
+    target_link_libraries(MShogiLib PRIVATE MShogiSelfPlay)
+endif()
+
 target_include_directories(MShogiLib PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 target_link_libraries(MShogiLib PUBLIC
@@ -126,3 +151,19 @@ target_link_libraries(MShogiApp PRIVATE
     Qt6::Gui
     Qt6::Multimedia
 )
+
+if(MSHOGI_ENABLE_ONNX_AGENT)
+    add_custom_command(TARGET MShogiApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:MShogiApp>/models"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${MSHOGI_ONNXRUNTIME_ROOT}/onnxruntime.dll"
+                "$<TARGET_FILE_DIR:MShogiApp>/onnxruntime.dll"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${MSHOGI_ONNX_MODEL}"
+                "$<TARGET_FILE_DIR:MShogiApp>/models/mshogi_policy_value.onnx"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${MSHOGI_ONNX_MANIFEST}/manifest.json"
+                "$<TARGET_FILE_DIR:MShogiApp>/models/manifest.json"
+        VERBATIM
+    )
+endif()

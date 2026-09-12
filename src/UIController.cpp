@@ -4,7 +4,12 @@
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QMessageBox>
+#include <QCoreApplication>
+#include <QDir>
 #include "GameSetupDialog.h"
+#ifdef MSHOGI_WITH_ONNX_AGENT
+#include "OnnxAgent.h"
+#endif
 // QSS
 #include <QStyle>
 
@@ -145,6 +150,26 @@ bool UIController::promptSettingsAndStart() {
     if (dialog.exec() != QDialog::Accepted) return false;
 
     const GameSetupResult& setup = dialog.setupResult();
+    std::shared_ptr<GameAgent> selectedAgent;
+    if (setup.playAgainstAi) {
+        try {
+#ifdef MSHOGI_WITH_ONNX_AGENT
+            if (setup.useNeuralAi) {
+                const QDir appDirectory(QCoreApplication::applicationDirPath());
+                selectedAgent = std::make_shared<OnnxAgent>(
+                    appDirectory.filePath("onnxruntime.dll").toStdWString(),
+                    appDirectory.filePath("models/mshogi_policy_value.onnx").toStdWString());
+            } else
+#endif
+            {
+                selectedAgent = std::make_shared<AlphaBetaAgent>(setup.aiDepth);
+            }
+        } catch (const std::exception& error) {
+            QMessageBox::critical(this, "AI 加载失败",
+                                  QString::fromUtf8(error.what()));
+            return false;
+        }
+    }
     m_sentePlayerName = setup.sentePlayerName;
     m_gotePlayerName = setup.gotePlayerName;
     m_lblOpeningDraw->setText(QString("猜先数字：%1").arg(setup.openingDraw.number));
@@ -155,8 +180,7 @@ bool UIController::promptSettingsAndStart() {
     m_gameEngine->clearAgents();
     if (setup.playAgainstAi) {
         const Player aiPlayer = setup.aiIsSente ? Player::Sente : Player::Gote;
-        m_gameEngine->setAgent(aiPlayer,
-                               std::make_shared<AlphaBetaAgent>(setup.aiDepth));
+        m_gameEngine->setAgent(aiPlayer, std::move(selectedAgent));
     }
     m_gameEngine->startGame(setup.totalSeconds, setup.incrementSeconds);
     return true;

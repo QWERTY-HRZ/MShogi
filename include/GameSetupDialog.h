@@ -19,6 +19,7 @@ struct GameSetupResult {
     int incrementSeconds = 5;
     bool playAgainstAi = false;
     bool aiIsSente = false;
+    bool useNeuralAi = false;
     int aiDepth = 3;
     OpeningDrawResult openingDraw;
 };
@@ -39,6 +40,7 @@ private:
     QSpinBox* m_totalMinutesSpin;
     QSpinBox* m_incrementSecondsSpin;
     QComboBox* m_gameModeCombo;
+    QComboBox* m_aiTypeCombo;
     QSpinBox* m_aiDepthSpin;
     QComboBox* m_guessingPlayerCombo;
     QRadioButton* m_oddButton;
