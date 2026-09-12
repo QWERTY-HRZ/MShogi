@@ -9,7 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from mshogi_ai.data import ACTION_COUNT, RULE_VERSION, sha256_file
-from run_onnx_arena import wilson_interval
+from run_onnx_arena import promotion_eligible, wilson_interval
 
 
 def verify_model(model: Path, manifest_path: Path) -> dict[str, object]:
@@ -102,9 +102,9 @@ def main() -> int:
     decisive = counts["win"] + counts["loss"]
     score_rate = (counts["win"] + 0.5 * counts["draw"]) / max(completed, 1)
     interval = wilson_interval(counts["win"], decisive)
-    eligible = (
-        counts["truncated"] == 0 and score_rate >= args.min_score_rate and
-        interval[0] >= args.min_wilson_lower
+    eligible = promotion_eligible(
+        args.games, counts["truncated"], score_rate, interval[0],
+        args.min_score_rate, args.min_wilson_lower,
     )
     pair_points: Counter[str] = Counter()
     for pair_id in range(args.games // 2):
@@ -138,6 +138,7 @@ def main() -> int:
             "production_games": 1000,
             "min_score_rate": args.min_score_rate,
             "min_decisive_wilson_lower": args.min_wilson_lower,
+            "sample_size_met": args.games >= 1000,
             "decision": "promote_candidate" if eligible else "retain_champion",
             "proof_only": args.games < 1000,
         },

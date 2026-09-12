@@ -29,6 +29,17 @@ def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -
     return [lower, upper]
 
 
+def promotion_eligible(games: int, truncated: int, score_rate: float,
+                       wilson_lower: float, min_score_rate: float = 0.55,
+                       min_wilson_lower: float = 0.50,
+                       production_games: int = 1000) -> bool:
+    # 小规模 proof 只验证管线，绝不能因偶然结果覆盖正式冠军。
+    return (
+        games >= production_games and truncated == 0 and
+        score_rate >= min_score_rate and wilson_lower >= min_wilson_lower
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate ONNX against Alpha-Beta")
     parser.add_argument("--arena-exe", type=Path, required=True)

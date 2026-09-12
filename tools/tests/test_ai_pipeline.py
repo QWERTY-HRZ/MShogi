@@ -16,7 +16,7 @@ from mshogi_ai.data import (
     visit_policy,
 )
 from mshogi_ai.model import MShogiNet, ModelConfig, policy_value_loss
-from run_onnx_arena import wilson_interval
+from run_onnx_arena import promotion_eligible, wilson_interval
 from manage_replay_buffer import add_shards
 
 
@@ -144,6 +144,12 @@ def test_wilson_interval_handles_empty_and_extreme_results() -> None:
     lower, upper = wilson_interval(100, 100)
     assert 0.96 < lower < 0.97
     assert upper == 1.0
+
+
+def test_proof_sample_can_never_promote_champion() -> None:
+    assert not promotion_eligible(20, 0, 1.0, 1.0)
+    assert not promotion_eligible(1000, 1, 1.0, 1.0)
+    assert promotion_eligible(1000, 0, 0.56, 0.51)
 
 
 def test_versioned_replay_buffer_is_idempotent(tmp_path) -> None:

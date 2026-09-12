@@ -12,7 +12,7 @@ import numpy as np
 import onnxruntime as ort
 
 from mshogi_ai.data import ACTION_COUNT, RULE_VERSION, parse_state, sha256_file
-from run_onnx_arena import wilson_interval
+from run_onnx_arena import promotion_eligible, wilson_interval
 
 
 def load_model(model_path: Path, manifest_path: Path) -> tuple[ort.InferenceSession, dict]:
@@ -154,9 +154,9 @@ def main() -> int:
     decisive = counts["win"] + counts["loss"]
     score_rate = (counts["win"] + 0.5 * counts["draw"]) / max(completed, 1)
     interval = wilson_interval(counts["win"], decisive)
-    eligible = (
-        counts["truncated"] == 0 and score_rate >= args.min_score_rate and
-        interval[0] >= args.min_wilson_lower
+    eligible = promotion_eligible(
+        args.games, counts["truncated"], score_rate, interval[0],
+        args.min_score_rate, args.min_wilson_lower,
     )
     summary = {
         "arena_commit": arena_commit, "rule_version": RULE_VERSION,
@@ -173,6 +173,7 @@ def main() -> int:
         "promotion_gate": {
             "min_score_rate": args.min_score_rate,
             "min_decisive_wilson_lower": args.min_wilson_lower,
+            "sample_size_met": args.games >= 1000,
             "decision": "promote_candidate" if eligible else "retain_champion",
         },
         "inference": {"seconds": inference_seconds, "positions": inference_positions,
