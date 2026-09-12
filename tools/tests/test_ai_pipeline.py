@@ -15,7 +15,8 @@ from mshogi_ai.data import (
     teacher_policy,
     visit_policy,
 )
-from mshogi_ai.model import MShogiNet, ModelConfig, policy_value_loss
+from mshogi_ai.model import (MShogiNet, ModelConfig, expand_model_state,
+                             policy_value_loss)
 from run_onnx_arena import promotion_eligible, wilson_interval
 from manage_replay_buffer import add_shards
 from manage_replay_pool import update_pool
@@ -136,6 +137,31 @@ def test_policy_value_network_shapes_and_masked_loss() -> None:
     assert torch.isfinite(loss)
     assert torch.isfinite(policy_loss)
     assert torch.isfinite(value_loss)
+
+
+def test_width_depth_expansion_preserves_outputs_before_training() -> None:
+    torch.manual_seed(7)
+    source_config = ModelConfig(channels=16, residual_blocks=2,
+                                policy_channels=4, value_channels=2)
+    target_config = ModelConfig(channels=24, residual_blocks=4,
+                                policy_channels=4, value_channels=2)
+    source = MShogiNet(source_config).eval()
+    target = MShogiNet(target_config).eval()
+    target.load_state_dict(expand_model_state(
+        source.state_dict(), source_config, target_config
+    ))
+    inputs = (torch.randn(5, 10, 6, 5), torch.randn(5, 2, 3, 4),
+              torch.randn(5, 5))
+    with torch.inference_mode():
+        source_policy, source_value = source(*inputs)
+        target_policy, target_value = target(*inputs)
+    torch.testing.assert_close(target_policy, source_policy, atol=1.0e-5, rtol=1.0e-5)
+    torch.testing.assert_close(target_value, source_value, atol=1.0e-6, rtol=1.0e-5)
+    trained_policy, trained_value = target(*inputs)
+    (trained_policy.square().mean() + trained_value.square().mean()).backward()
+    new_block_gradient = target.blocks[source_config.residual_blocks].conv2.weight.grad
+    assert new_block_gradient is not None
+    assert float(new_block_gradient.abs().sum()) > 0.0
 
 
 def test_wilson_interval_handles_empty_and_extreme_results() -> None:

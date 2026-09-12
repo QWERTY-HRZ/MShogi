@@ -91,3 +91,35 @@ def policy_value_loss(
 
 def count_parameters(model: nn.Module) -> int:
     return sum(parameter.numel() for parameter in model.parameters())
+
+
+def expand_model_state(
+    source_state: dict[str, torch.Tensor],
+    source_config: ModelConfig,
+    target_config: ModelConfig,
+) -> dict[str, torch.Tensor]:
+    if (target_config.channels < source_config.channels or
+            target_config.residual_blocks < source_config.residual_blocks or
+            target_config.policy_channels != source_config.policy_channels or
+            target_config.value_channels != source_config.value_channels or
+            target_config.action_count != source_config.action_count):
+        raise ValueError("target model is not a compatible width/depth expansion")
+    target = MShogiNet(target_config).state_dict()
+    random_extra_prefixes = ("stem.", "stem_bn.", "auxiliary.", "value_fc1.")
+    for name, source in source_state.items():
+        if name not in target or source.ndim != target[name].ndim or any(
+                source_size > target_size for source_size, target_size in
+                zip(source.shape, target[name].shape, strict=True)):
+            raise ValueError(f"cannot expand checkpoint tensor {name}")
+        if source.shape != target[name].shape and not name.startswith(random_extra_prefixes):
+            if target[name].is_floating_point():
+                target[name].fill_(1.0 if name.endswith("running_var") else 0.0)
+            else:
+                target[name].zero_()
+        slices = tuple(slice(0, size) for size in source.shape)
+        target[name][slices].copy_(source)
+    for block_index in range(source_config.residual_blocks,
+                             target_config.residual_blocks):
+        # 新块第一层保留随机特征，第二层从零开始，初始为恒等且梯度可进入。
+        target[f"blocks.{block_index}.conv2.weight"].zero_()
+    return target

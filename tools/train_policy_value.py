@@ -15,7 +15,8 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from mshogi_ai.data import MShogiDataset, RULE_VERSION, load_split_samples, sha256_file
-from mshogi_ai.model import MShogiNet, ModelConfig, count_parameters, policy_value_loss
+from mshogi_ai.model import (MShogiNet, ModelConfig, count_parameters,
+                             expand_model_state, policy_value_loss)
 
 
 class BatchLoader:
@@ -233,6 +234,8 @@ def main() -> int:
     parser.add_argument("--residual-blocks", type=int, default=6)
     parser.add_argument("--initial-checkpoint", type=Path,
                         help="continue from the current champion checkpoint")
+    parser.add_argument("--expand-initial-checkpoint", action="store_true",
+                        help="preserve-function width/depth expansion")
     parser.add_argument("--seed", type=int, default=20260911)
     parser.add_argument("--split-seed", type=int, default=20260911)
     parser.add_argument("--num-workers", type=int, default=0)
@@ -309,10 +312,16 @@ def main() -> int:
                              weights_only=False)
         if initial.get("rule_version") != RULE_VERSION:
             raise ValueError("initial checkpoint rule version is incompatible")
-        if initial.get("model_config") != model_config.to_dict():
+        source_config = ModelConfig(**initial["model_config"])
+        if source_config == model_config:
+            # 强化候选从当前冠军继续学习，避免小批 replay 将网络随机重置。
+            model.load_state_dict(initial["model_state"])
+        elif args.expand_initial_checkpoint:
+            model.load_state_dict(expand_model_state(
+                initial["model_state"], source_config, model_config
+            ))
+        else:
             raise ValueError("initial checkpoint architecture is incompatible")
-        # 强化候选从当前冠军继续学习，避免小批 replay 将网络随机重置。
-        model.load_state_dict(initial["model_state"])
     source_commit = training_commit()
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
