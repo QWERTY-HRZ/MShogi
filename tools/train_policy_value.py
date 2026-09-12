@@ -12,11 +12,30 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from mshogi_ai.data import MShogiDataset, RULE_VERSION, load_split_samples, sha256_file
 from mshogi_ai.model import MShogiNet, ModelConfig, count_parameters, policy_value_loss
+
+
+class BatchLoader:
+    def __init__(
+        self, dataset: MShogiDataset, batch_size: int, shuffle: bool, seed: int
+    ) -> None:
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.random = np.random.default_rng(seed)
+
+    def __iter__(self):
+        indices = np.arange(len(self.dataset), dtype=np.int64)
+        if self.shuffle:
+            self.random.shuffle(indices)
+        for start in range(0, len(indices), self.batch_size):
+            yield self.dataset.batch(indices[start:start + self.batch_size])
+
+    def __len__(self) -> int:
+        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
 
 
 def resolve_paths(patterns: list[str]) -> list[Path]:
@@ -58,7 +77,7 @@ def training_commit() -> str:
 
 def run_loader(
     model: MShogiNet,
-    loader: DataLoader,
+    loader: BatchLoader,
     device: torch.device,
     optimizer: torch.optim.Optimizer | None,
     value_weight: float,
@@ -216,15 +235,9 @@ def main() -> int:
         datasets[name] = MShogiDataset(
             split_samples.pop(name), augment=name == "train", **dataset_arguments
         )
-    generator = torch.Generator().manual_seed(args.seed)
     loaders = {
-        name: DataLoader(
-            dataset,
-            batch_size=args.batch_size,
-            shuffle=name == "train",
-            num_workers=args.num_workers,
-            pin_memory=device.type == "cuda",
-            generator=generator if name == "train" else None,
+        name: BatchLoader(
+            dataset, args.batch_size, name == "train", args.seed
         )
         for name, dataset in datasets.items()
     }

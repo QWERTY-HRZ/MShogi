@@ -71,6 +71,10 @@ def test_rotation_is_an_involution_and_swaps_players() -> None:
     assert int(rotated["legal_mask"].sum()) == 2
     assert original["board"].dtype == torch.uint8
     assert original["policy_target"].dtype == torch.float16
+    vectorized = dataset.batch((0, 1))
+    for name in original:
+        assert torch.equal(vectorized[name][0], original[name])
+        assert torch.equal(vectorized[name][1], rotated[name])
 
 
 def test_terminal_distance_weights_and_truncation_mask() -> None:

@@ -343,42 +343,49 @@ class MShogiDataset(Dataset[dict[str, torch.Tensor]]):
     def __len__(self) -> int:
         return len(self.boards) * (2 if self.augment else 1)
 
-    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+    def batch(self, indices: Sequence[int] | np.ndarray) -> dict[str, torch.Tensor]:
+        indices_array = np.asarray(indices, dtype=np.int64)
         base_count = len(self.boards)
-        rotated = self.augment and index >= base_count
-        base_index = index % base_count
-        board = self.boards[base_index]
-        hand = self.hands[base_index]
-        meta = self.metas[base_index]
-        legal = self.legal_masks[base_index]
-        policy = self.policy_targets[base_index]
+        rotated = (indices_array >= base_count) if self.augment else np.zeros(
+            len(indices_array), dtype=np.bool_
+        )
+        base_indices = indices_array % base_count
+        board = self.boards[base_indices]
+        hand = self.hands[base_indices]
+        meta = self.metas[base_indices]
+        legal = self.legal_masks[base_indices]
+        policy = self.policy_targets[base_indices]
 
-        if rotated:
-            spatial = np.flip(board, axis=(1, 2))
-            board = np.concatenate((spatial[5:], spatial[:5]), axis=0).copy()
-            hand = hand[::-1].copy()
-            meta = meta[[1, 0, 3, 2, 4]].copy()
-            rotated_legal = np.zeros_like(legal)
-            rotated_policy = np.zeros_like(policy)
-            rotated_legal[ROTATED_ACTION_IDS] = legal
-            rotated_policy[ROTATED_ACTION_IDS] = policy
-            legal = rotated_legal
-            policy = rotated_policy
+        if rotated.any():
+            # 整批旋转和换手，避免百万样本训练中的逐项 Python 开销。
+            spatial = np.flip(board[rotated], axis=(2, 3))
+            board[rotated] = np.concatenate((spatial[:, 5:], spatial[:, :5]), axis=1)
+            hand[rotated] = hand[rotated, ::-1]
+            meta[rotated] = meta[rotated][:, [1, 0, 3, 2, 4]]
+            rotated_legal = np.zeros_like(legal[rotated])
+            rotated_policy = np.zeros_like(policy[rotated])
+            rotated_legal[:, ROTATED_ACTION_IDS] = legal[rotated]
+            rotated_policy[:, ROTATED_ACTION_IDS] = policy[rotated]
+            legal[rotated] = rotated_legal
+            policy[rotated] = rotated_policy
 
         return {
-            "board": torch.from_numpy(np.asarray(board)),
-            "hand": torch.from_numpy(np.asarray(hand)),
-            "meta": torch.from_numpy(np.asarray(meta)),
-            "legal_mask": torch.from_numpy(np.asarray(legal)),
-            "policy_target": torch.from_numpy(np.asarray(policy)),
-            "value_target": torch.tensor(self.value_targets[base_index]),
-            "value_weight": torch.tensor(self.value_weights[base_index]),
-            "value_valid": torch.tensor(self.value_valid[base_index]),
-            "ply": torch.tensor(self.plies[base_index], dtype=torch.int32),
-            "remaining_plies": torch.tensor(
-                self.remaining_plies[base_index], dtype=torch.int32
+            "board": torch.from_numpy(board),
+            "hand": torch.from_numpy(hand),
+            "meta": torch.from_numpy(meta),
+            "legal_mask": torch.from_numpy(legal),
+            "policy_target": torch.from_numpy(policy),
+            "value_target": torch.from_numpy(self.value_targets[base_indices]),
+            "value_weight": torch.from_numpy(self.value_weights[base_indices]),
+            "value_valid": torch.from_numpy(self.value_valid[base_indices]),
+            "ply": torch.from_numpy(self.plies[base_indices].astype(np.int32)),
+            "remaining_plies": torch.from_numpy(
+                self.remaining_plies[base_indices].astype(np.int32)
             ),
         }
+
+    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+        return {name: tensor[0] for name, tensor in self.batch((index,)).items()}
 
 
 def sha256_file(path: Path | str) -> str:
