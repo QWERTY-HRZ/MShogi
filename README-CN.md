@@ -8,7 +8,7 @@ MShogi 是一款使用 C++17 与 Qt 6 开发的双人桌面棋类游戏。它采
 
 - 完整盘面与轮次管理，先手位于下方并先行。
 - 整合式开局设置与奇偶猜先，可设置玩家名称、棋钟和每步奖励。
-- 支持双人和人机模式；内置后台运行的 Alpha-Beta 基线 AI，可选择搜索深度。
+- 支持双人和人机模式；已部署 20k 策略价值 AI，同时保留可选搜索深度的 Alpha-Beta。
 - 车的长距离空格移动与纵向两格突击、相的隔子吃子、兵到底线升变为侯。
 - 手驹按具体棋子记录有限禁手状态，支持合法位置提示与拖拽打入。
 - 棋谱、悔棋、重开、认输、暂停与继续。
@@ -92,13 +92,21 @@ CMake 要求 Qt 6.8 或更高的 6.x 版本。Google Test 1.14.0 从仓库内的
 
     conda run -n MShogi python ./Src/Mixed-Shogi/tools/export_onnx.py --checkpoint ./Dataset/AI/v1.11.0/models/supervised_1k/checkpoints/best.pt --data ./Dataset/AI/v1.11.0/selfplay/supervised_1k_seed_20260911.jsonl.gz --output ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/manifest.json
 
-`mshogi_arena` 由 C++ GameCore 管理规则和多线程 Alpha-Beta，Python 将神经方局面批量送入 ONNX Runtime。每两局共享同一随机开局并交换模型先后手。当前 1k 监督模型未通过对战门槛，因此尚未接入客户端。
+`mshogi_arena` 由 C++ GameCore 管理规则和多线程 Alpha-Beta，Python 将神经方局面批量送入 ONNX Runtime。每两局共享同一随机开局并交换模型先后手。1k 基线未通过门槛；20k 模型对深度 1 的直接策略得分率为 63.80%，决定局 Wilson 下界为 60.80%，因此已接入客户端。
 
 使用价值头重排策略 top-5 候选：
 
-    conda run -n MShogi python ./Src/Mixed-Shogi/tools/run_onnx_arena.py --arena-exe ./Src/Build/MinGW_13_1_0-Release/src/mshogi_arena.exe --model ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/manifest.json --output ./Dataset/AI/v1.11.0/models/supervised_1k/evaluation/value_rerank --games 1000 --depth 1 --top-k 5 --policy-weight 1 --value-weight 0.5
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/run_onnx_arena.py --arena-exe ./Src/Build/MinGW_13_1_0-Release/src/mshogi_arena.exe --model ./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/onnx/manifest.json --output ./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/evaluation/rerank_ab_depth_1_1k --games 1000 --depth 1 --top-k 5 --policy-weight 1 --value-weight 0.5
 
-候选动作由策略头产生，在 C++ GameCore 中各展开一手；立即终局使用精确胜负值，其他子局面批量送入价值头。当前配置改善了对战结果，但仍未通过客户端部署门槛。
+候选动作由策略产生，在 C++ GameCore 中各展开一手；立即终局使用精确胜负值，其他子局面批量送入价值头。部署的 20k 模型使用该配置对深度 1 的得分率为 77.30%。
+
+Windows 神经客户端在配置时显式提供 ONNX Runtime 1.29 头文件/DLL 与已校验模型：
+
+    cmake -S ./Src/Mixed-Shogi -B ./Src/Build/MinGW_13_1_0-Release -DMSHOGI_ENABLE_ONNX_AGENT=ON -DMSHOGI_ONNXRUNTIME_ROOT=./Src/Build/ThirdParty/onnxruntime-1.29.0 -DMSHOGI_ONNX_MODEL=./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/onnx/mshogi_policy_value.onnx
+    cmake --build ./Src/Build/MinGW_13_1_0-Release --parallel
+    ./Src/Mixed-Shogi/tools/package_windows.ps1 -BuildDirectory ./Src/Build/MinGW_13_1_0-Release -OutputDirectory ./Src/Build/MShogi-v1.11.0-Neural-Release -QtRoot D:/Apps_D/Qt/6.8.3/mingw_64 -OnnxRuntimeDll ./Src/Build/ThirdParty/onnxruntime-1.29.0/onnxruntime.dll -OnnxModel ./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/onnx/mshogi_policy_value.onnx
+
+发布目录包含 CPU ONNX Runtime、模型、Qt/MinGW/MSVC 运行库和逐文件 SHA-256 清单，不要求用户安装 Python、Conda 或 CUDA。可运行 `MShogiApp.exe --ai-smoke` 做无交互部署自检。
 
 ## 许可证
 

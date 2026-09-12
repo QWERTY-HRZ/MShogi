@@ -8,7 +8,7 @@ MShogi is a two-player desktop board game written in C++17 and Qt 6. It uses a 5
 
 - Canonical turn and board-state management, with Sente starting from the bottom.
 - Integrated match setup and odd/even opening draw for player names and clocks.
-- Local human-versus-human and human-versus-AI modes with a background Alpha-Beta baseline agent.
+- Local human-versus-human and human-versus-AI modes with a deployed 20k policy-value agent and an Alpha-Beta fallback option.
 - Long non-capturing rook moves, two-square vertical rook assaults, screened bishop captures, and mandatory pawn promotion.
 - Canonical per-piece hand cooldown states, legal-move highlighting, and drag-and-drop placement.
 - Notation, undo, restart, resignation, pause, and resume controls.
@@ -90,13 +90,21 @@ Export dynamic-batch ONNX and verify numerical and legal-masked action equivalen
 
     conda run -n MShogi python ./Src/Mixed-Shogi/tools/export_onnx.py --checkpoint ./Dataset/AI/v1.11.0/models/supervised_1k/checkpoints/best.pt --data ./Dataset/AI/v1.11.0/selfplay/supervised_1k_seed_20260911.jsonl.gz --output ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/manifest.json
 
-`mshogi_arena` keeps rules and multithreaded Alpha-Beta in the C++ GameCore while Python batches neural positions through ONNX Runtime. Paired games share an opening and swap model sides. The current 1k supervised model did not pass its arena gate and is not exposed in the desktop client.
+`mshogi_arena` keeps rules and multithreaded Alpha-Beta in the C++ GameCore while Python batches neural positions through ONNX Runtime. Paired games share an opening and swap model sides. The 1k baseline failed its gate; the 20k model passed with a 63.80% direct-policy score and a 60.80% decisive-game Wilson lower bound against depth 1, so it is exposed in the desktop client.
 
 Use the value head to rerank the policy's top-five candidates:
 
-    conda run -n MShogi python ./Src/Mixed-Shogi/tools/run_onnx_arena.py --arena-exe ./Src/Build/MinGW_13_1_0-Release/src/mshogi_arena.exe --model ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_1k/onnx/manifest.json --output ./Dataset/AI/v1.11.0/models/supervised_1k/evaluation/value_rerank --games 1000 --depth 1 --top-k 5 --policy-weight 1 --value-weight 0.5
+    conda run -n MShogi python ./Src/Mixed-Shogi/tools/run_onnx_arena.py --arena-exe ./Src/Build/MinGW_13_1_0-Release/src/mshogi_arena.exe --model ./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/onnx/mshogi_policy_value.onnx --manifest ./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/onnx/manifest.json --output ./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/evaluation/rerank_ab_depth_1_1k --games 1000 --depth 1 --top-k 5 --policy-weight 1 --value-weight 0.5
 
-Policy candidates are expanded by the C++ GameCore. Immediate terminal actions use exact outcomes, while non-terminal child positions are batch-evaluated by the value head. This improves play but the current model still fails the desktop deployment gate.
+Policy candidates are expanded by the C++ GameCore. Immediate terminal actions use exact outcomes, while non-terminal child positions are batch-evaluated by the value head. The deployed 20k model scores 77.30% with this configuration against depth 1.
+
+Build and package the optional Windows neural client by providing ONNX Runtime 1.29 headers/DLL and the verified model:
+
+    cmake -S ./Src/Mixed-Shogi -B ./Src/Build/MinGW_13_1_0-Release -DMSHOGI_ENABLE_ONNX_AGENT=ON -DMSHOGI_ONNXRUNTIME_ROOT=./Src/Build/ThirdParty/onnxruntime-1.29.0 -DMSHOGI_ONNX_MODEL=./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/onnx/mshogi_policy_value.onnx
+    cmake --build ./Src/Build/MinGW_13_1_0-Release --parallel
+    ./Src/Mixed-Shogi/tools/package_windows.ps1 -BuildDirectory ./Src/Build/MinGW_13_1_0-Release -OutputDirectory ./Src/Build/MShogi-v1.11.0-Neural-Release -QtRoot D:/Apps_D/Qt/6.8.3/mingw_64 -OnnxRuntimeDll ./Src/Build/ThirdParty/onnxruntime-1.29.0/onnxruntime.dll -OnnxModel ./Dataset/AI/v1.11.0/models/supervised_20k/iter1_a/onnx/mshogi_policy_value.onnx
+
+The package includes CPU ONNX Runtime, the model, Qt/MinGW/MSVC runtime files, and a SHA-256 deployment manifest. It requires neither Python nor CUDA. Run `MShogiApp.exe --ai-smoke` for a non-interactive model deployment check.
 
 ## License
 
