@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -26,6 +28,7 @@ struct Config {
     int leavesPerBatch = 1;
     int openingPlies = 6;
     int maxPlies = 100;
+    int alphaBetaDepth = 0;
     double exploration = 1.5;
     double virtualLoss = 1.0;
     std::uint64_t seed = 1;
@@ -115,19 +118,25 @@ int main(int argc, char* argv[]) {
             else if (option == "--c-puct") config.exploration = std::stod(requireValue(index, argc, argv));
             else if (option == "--opening-plies") config.openingPlies = std::stoi(requireValue(index, argc, argv));
             else if (option == "--max-plies") config.maxPlies = std::stoi(requireValue(index, argc, argv));
+            else if (option == "--alpha-beta-depth") config.alphaBetaDepth = std::stoi(requireValue(index, argc, argv));
             else if (option == "--seed") config.seed = std::stoull(requireValue(index, argc, argv));
             else throw std::invalid_argument("未知选项: " + option);
         }
         if (config.games <= 0 || config.games % 2 != 0 || config.simulations < 2 ||
             config.leavesPerBatch <= 0 || config.virtualLoss < 0.0 ||
+            config.alphaBetaDepth < 0 ||
             config.openingPlies < 0 || config.maxPlies <= config.openingPlies ||
             config.runtimePath.empty() || config.candidatePath.empty() ||
-            config.championPath.empty()) {
+            (config.alphaBetaDepth <= 0 && config.championPath.empty())) {
             throw std::invalid_argument("无效的 PUCT arena 配置");
         }
 
         OnnxEvaluator candidateEvaluator(config.runtimePath, config.candidatePath);
-        OnnxEvaluator championEvaluator(config.runtimePath, config.championPath);
+        std::unique_ptr<OnnxEvaluator> championEvaluator;
+        if (config.alphaBetaDepth <= 0) {
+            championEvaluator = std::make_unique<OnnxEvaluator>(
+                config.runtimePath, config.championPath);
+        }
         PuctConfig searchConfig;
         searchConfig.simulations = config.simulations;
         searchConfig.leavesPerBatch = config.leavesPerBatch;
@@ -135,12 +144,18 @@ int main(int argc, char* argv[]) {
         searchConfig.virtualLoss = config.virtualLoss;
         searchConfig.dirichletEpsilon = 0.0;
         PuctBatchSearch candidateSearch(candidateEvaluator, searchConfig, config.games);
-        PuctBatchSearch championSearch(championEvaluator, searchConfig, config.games);
+        std::unique_ptr<PuctBatchSearch> championSearch;
+        if (championEvaluator) {
+            championSearch = std::make_unique<PuctBatchSearch>(
+                *championEvaluator, searchConfig, config.games);
+        }
+        AlphaBetaAgent alphaBeta(std::max(1, config.alphaBetaDepth));
 
         std::vector<ArenaGame> games(config.games);
         std::cout << "M\t" << MSHOGI_CORE_COMMIT << '\t'
                   << GameConstants::RULE_VERSION << '\t' << config.simulations << '\t'
-                  << config.leavesPerBatch << '\t' << config.virtualLoss << '\n';
+                  << config.leavesPerBatch << '\t' << config.virtualLoss << '\t'
+                  << (config.alphaBetaDepth > 0 ? "alphabeta" : "puct") << '\n';
         for (int pairId = 0; pairId < config.games / 2; ++pairId) {
             ArenaGame& candidateSente = games[pairId * 2];
             ArenaGame& candidateGote = games[pairId * 2 + 1];
@@ -163,44 +178,64 @@ int main(int argc, char* argv[]) {
             std::vector<const GameCore*> championPositions(games.size(), nullptr);
             std::vector<std::uint64_t> seeds(games.size(), 0);
             std::vector<double> temperatures(games.size(), 0.0);
+            std::vector<std::optional<Move>> alphaBetaMoves(games.size());
             for (std::size_t index = 0; index < games.size(); ++index) {
                 if (finished(games[index], config.maxPlies)) continue;
                 seeds[index] = mixedSeed(config.seed, games[index].pairId,
                                          games[index].plies);
-                (candidateTurn(games[index]) ? candidatePositions : championPositions)[index] =
-                    &games[index].core;
+                if (candidateTurn(games[index])) {
+                    candidatePositions[index] = &games[index].core;
+                } else if (config.alphaBetaDepth > 0) {
+                    alphaBetaMoves[index] = alphaBeta.chooseAction(games[index].core);
+                } else {
+                    championPositions[index] = &games[index].core;
+                }
             }
             const auto candidateResults = candidateSearch.search(
                 candidatePositions, seeds, temperatures);
-            const auto championResults = championSearch.search(
-                championPositions, seeds, temperatures);
+            std::vector<std::optional<PuctResult>> championResults(games.size());
+            if (championSearch) {
+                championResults = championSearch->search(
+                    championPositions, seeds, temperatures);
+            }
             for (std::size_t index = 0; index < games.size(); ++index) {
                 if (finished(games[index], config.maxPlies)) continue;
-                const auto& result = candidateTurn(games[index])
-                                         ? candidateResults[index]
-                                         : championResults[index];
-                if (!result || !games[index].core.applyAction(result->selectedAction)) {
+                std::optional<Move> selected;
+                if (candidateTurn(games[index])) {
+                    if (candidateResults[index]) {
+                        selected = candidateResults[index]->selectedAction;
+                    }
+                } else if (config.alphaBetaDepth > 0) {
+                    selected = alphaBetaMoves[index];
+                } else if (championResults[index]) {
+                    selected = championResults[index]->selectedAction;
+                }
+                if (!selected || !games[index].core.applyAction(*selected)) {
                     throw std::runtime_error("PUCT arena 得到非法着法");
                 }
                 ++games[index].plies;
-                // 双方搜索树都跟随实战着法前进，保证后续回合可复用同一分支。
-                candidateSearch.advance(index, result->selectedAction, games[index].core);
-                championSearch.advance(index, result->selectedAction, games[index].core);
+                // 神经搜索树跟随双方实战着法前进，保留下一回合可复用的分支。
+                candidateSearch.advance(index, *selected, games[index].core);
+                if (championSearch) {
+                    championSearch->advance(index, *selected, games[index].core);
+                }
             }
         }
 
         const auto& candidateStats = candidateSearch.statistics();
-        const auto& championStats = championSearch.statistics();
         std::cout << "S\tC\t" << candidateStats.simulations << '\t'
                   << candidateStats.inferenceBatches << '\t'
                   << candidateStats.inferencePositions << '\t'
                   << candidateStats.treeReuseHits << '\t'
                   << candidateStats.maxInferenceBatch << '\n';
-        std::cout << "S\tH\t" << championStats.simulations << '\t'
-                  << championStats.inferenceBatches << '\t'
-                  << championStats.inferencePositions << '\t'
-                  << championStats.treeReuseHits << '\t'
-                  << championStats.maxInferenceBatch << '\n';
+        if (championSearch) {
+            const auto& championStats = championSearch->statistics();
+            std::cout << "S\tH\t" << championStats.simulations << '\t'
+                      << championStats.inferenceBatches << '\t'
+                      << championStats.inferencePositions << '\t'
+                      << championStats.treeReuseHits << '\t'
+                      << championStats.maxInferenceBatch << '\n';
+        }
         std::cout << "D\t" << config.games << '\n';
         return 0;
     } catch (const std::exception& error) {

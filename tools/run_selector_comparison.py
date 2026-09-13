@@ -47,6 +47,21 @@ def result_summary(path: Path) -> dict[str, object]:
     }
 
 
+def common_result_summary(path: Path) -> dict[str, object]:
+    report = read_json(path)
+    results = report.get("results", report.get("neural"))
+    wilson = (results["decisive_wilson95"] if "decisive_wilson95" in results
+              else results["decisive_win_rate_wilson95"])
+    return {
+        "summary": str(path.resolve()), "summary_sha256": sha256_file(path),
+        "wins": results["wins"], "draws": results["draws"],
+        "losses": results["losses"], "truncated": results["truncated"],
+        "score_rate": results["score_rate"],
+        "decisive_wilson95": wilson,
+        "elapsed_seconds": report["elapsed_seconds"],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare deployed and PUCT champions by selector")
     parser.add_argument("--arena-exe", type=Path, required=True)
@@ -103,6 +118,33 @@ def main() -> int:
             "--seed", str(args.seed), "--stage", "proof",
         ])
 
+    common_root = output / "common_alphabeta_d2"
+    common_root.mkdir(exist_ok=True)
+    for name, top_k, value_weight in (("direct", 1, 0.0), ("top5", 5, 0.5)):
+        run_checked([
+            sys.executable, str(script_directory / "run_onnx_arena.py"),
+            "--arena-exe", str(args.arena_exe.resolve()),
+            "--model", str(args.candidate.resolve()),
+            "--manifest", str(args.candidate_manifest.resolve()),
+            "--output", str(common_root / name), "--games", str(args.games),
+            "--depth", "2", "--opening-plies", "6", "--max-plies", "200",
+            "--threads", "16", "--seed", str(args.seed), "--top-k", str(top_k),
+            "--policy-weight", "1.0", "--value-weight", str(value_weight),
+        ])
+    for budget in budgets:
+        run_checked([
+            sys.executable, str(script_directory / "run_puct_vs_alphabeta.py"),
+            "--arena-exe", str(args.puct_arena_exe.resolve()),
+            "--runtime", str(args.runtime.resolve()),
+            "--model", str(args.candidate.resolve()),
+            "--manifest", str(args.candidate_manifest.resolve()),
+            "--output", str(common_root / f"puct_{budget}"),
+            "--games", str(args.games), "--depth", "2",
+            "--simulations", str(budget), "--leaves-per-batch", "4",
+            "--virtual-loss", "1", "--opening-plies", "6", "--max-plies", "200",
+            "--seed", str(args.seed),
+        ])
+
     latency_path = output / "single_game_latency.json"
     run_checked([
         sys.executable, str(script_directory / "benchmark_puct_latency.py"),
@@ -128,6 +170,24 @@ def main() -> int:
         directory.name: result_summary(directory / "summary.json")
         for directory in directories
     }
+    common_directories = [common_root / "direct", common_root / "top5"] + [
+        common_root / f"puct_{budget}" for budget in budgets
+    ]
+    common_signatures = [opening_signature(directory) for directory in common_directories]
+    if any(signature != signatures[0] for signature in common_signatures):
+        raise ValueError("common-opponent runs did not use the shared paired openings")
+    common_results = {
+        directory.name: common_result_summary(directory / "summary.json")
+        for directory in common_directories
+    }
+    best_common_selector = max(
+        common_results, key=lambda name: common_results[name]["score_rate"]
+    )
+    latency = read_json(latency_path)
+    responsive_budgets = [
+        budget for budget in budgets
+        if latency["models"]["candidate"]["measurements"][str(budget)]["p95_ms"] <= 100.0
+    ]
     report = {
         "report_version": 1, "games_per_selector": args.games,
         "pairs_per_selector": args.games // 2, "seed": args.seed,
@@ -135,8 +195,18 @@ def main() -> int:
         "candidate": str(args.candidate.resolve()),
         "champion": str(args.champion.resolve()),
         "selectors": selectors,
+        "common_opponent": {
+            "name": "AlphaBeta-Baseline", "depth": 2,
+            "results": common_results,
+            "best_score_selector": best_common_selector,
+        },
         "single_game_latency": str(latency_path),
         "single_game_latency_sha256": sha256_file(latency_path),
+        "client_screen": {
+            "p95_limit_ms": 100.0,
+            "responsive_puct_budgets": responsive_budgets,
+            "recommended_selector": best_common_selector,
+        },
     }
     summary_path = output / "summary.json"
     summary_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
