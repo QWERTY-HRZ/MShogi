@@ -111,6 +111,8 @@ if(MSHOGI_ENABLE_ONNX_AGENT)
     target_link_libraries(mshogi_puct_selfplay PRIVATE MShogiPolicyValue)
     add_executable(mshogi_puct_arena PuctArenaMain.cpp)
     target_link_libraries(mshogi_puct_arena PRIVATE MShogiPolicyValue)
+    add_executable(mshogi_puct_benchmark PuctBenchmarkMain.cpp)
+    target_link_libraries(mshogi_puct_benchmark PRIVATE MShogiPolicyValue)
 endif()
 execute_process(
     COMMAND git rev-parse --short=12 HEAD
@@ -133,6 +135,9 @@ if(MSHOGI_ENABLE_ONNX_AGENT)
         MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
     )
     target_compile_definitions(mshogi_puct_arena PRIVATE
+        MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
+    )
+    target_compile_definitions(mshogi_puct_benchmark PRIVATE
         MSHOGI_CORE_COMMIT="${MSHOGI_GIT_COMMIT}"
     )
 endif()

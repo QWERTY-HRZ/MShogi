@@ -6,6 +6,7 @@ import json
 import subprocess
 import time
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,17 @@ import onnxruntime as ort
 
 from mshogi_ai.data import ACTION_COUNT, RULE_VERSION, parse_state, sha256_file
 from run_onnx_arena import promotion_eligible, wilson_interval
+
+
+@dataclass
+class PendingPosition:
+    game_id: int
+    agent: str
+    board: np.ndarray
+    hand: np.ndarray
+    meta: np.ndarray
+    legal: np.ndarray
+    logits: np.ndarray | None = None
 
 
 def load_model(model_path: Path, manifest_path: Path) -> tuple[ort.InferenceSession, dict]:
@@ -31,6 +43,18 @@ def load_model(model_path: Path, manifest_path: Path) -> tuple[ort.InferenceSess
     ), manifest
 
 
+def select_reranked_action(logits: np.ndarray, legal: np.ndarray,
+                           candidates: np.ndarray, values: dict[int, float],
+                           policy_weight: float, value_weight: float) -> int:
+    best_logit = float(np.max(logits[legal]))
+    scores = [
+        policy_weight * (float(logits[action]) - best_logit) +
+        value_weight * values[int(action)]
+        for action in candidates
+    ]
+    return int(candidates[int(np.argmax(scores))])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Paired candidate-versus-champion arena")
     parser.add_argument("--arena-exe", type=Path, required=True)
@@ -43,10 +67,15 @@ def main() -> int:
     parser.add_argument("--opening-plies", type=int, default=6)
     parser.add_argument("--max-plies", type=int, default=200)
     parser.add_argument("--seed", type=int, default=20260912)
+    parser.add_argument("--top-k", type=int, default=1)
+    parser.add_argument("--policy-weight", type=float, default=1.0)
+    parser.add_argument("--value-weight", type=float, default=0.5)
     parser.add_argument("--min-score-rate", type=float, default=0.55)
     parser.add_argument("--min-wilson-lower", type=float, default=0.50)
     args = parser.parse_args()
-    if args.games <= 0 or args.games % 2 or args.max_plies <= args.opening_plies:
+    if (args.games <= 0 or args.games % 2 or args.max_plies <= args.opening_plies or
+            args.top_k <= 0 or args.policy_weight < 0.0 or args.value_weight < 0.0 or
+            (args.policy_weight == 0.0 and args.value_weight == 0.0)):
         raise ValueError("games must be positive/even and max plies must exceed opening plies")
 
     sessions: dict[str, ort.InferenceSession] = {}
@@ -75,6 +104,8 @@ def main() -> int:
     inference_batches = 0
     openings: dict[int, str] = {}
     results: list[dict[str, object]] = []
+    reranked_actions = 0
+    candidate_positions = 0
     arena_commit = "unknown"
     while True:
         line = process.stdout.readline()
@@ -104,25 +135,28 @@ def main() -> int:
             })
         elif fields[0] == "B":
             count = int(fields[1])
-            pending: list[tuple[int, str, np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
+            pending: list[PendingPosition] = []
             for _ in range(count):
                 position = process.stdout.readline().rstrip("\n").split("\t")
                 if len(position) != 6 or position[0] != "P" or position[2] not in sessions:
                     raise RuntimeError("invalid dual-neural position protocol")
                 board, hand, meta = parse_state(position[4])
                 legal = np.fromstring(position[5], dtype=np.int64, sep=",")
-                pending.append((int(position[1]), position[2], board, hand, meta, legal))
+                if legal.size == 0 or np.any(legal < 0) or np.any(legal >= ACTION_COUNT):
+                    raise RuntimeError("arena provided an invalid legal action list")
+                pending.append(PendingPosition(
+                    int(position[1]), position[2], board, hand, meta, legal
+                ))
 
-            selected: dict[int, int] = {}
             for agent in ("C", "H"):
-                group = [item for item in pending if item[1] == agent]
+                group = [item for item in pending if item.agent == agent]
                 if not group:
                     continue
                 inference_started = time.perf_counter()
                 logits, values = sessions[agent].run(None, {
-                    "board": np.stack([item[2] for item in group]),
-                    "hand": np.stack([item[3] for item in group]),
-                    "meta": np.stack([item[4] for item in group]),
+                    "board": np.stack([item.board for item in group]),
+                    "hand": np.stack([item.hand for item in group]),
+                    "meta": np.stack([item.meta for item in group]),
                 })
                 inference_seconds += time.perf_counter() - inference_started
                 inference_positions += len(group)
@@ -132,10 +166,83 @@ def main() -> int:
                 if not np.isfinite(logits).all() or not np.isfinite(values).all():
                     raise RuntimeError("model returned NaN or infinity")
                 for row, item in enumerate(group):
-                    legal = item[5]
-                    selected[item[0]] = int(legal[np.argmax(logits[row, legal])])
-            for game_id, *_ in pending:
-                process.stdin.write(f"A\t{game_id}\t{selected[game_id]}\n")
+                    item.logits = logits[row]
+
+            if args.top_k == 1:
+                for item in pending:
+                    assert item.logits is not None
+                    selected = int(item.legal[np.argmax(item.logits[item.legal])])
+                    process.stdin.write(f"A\t{item.game_id}\t{selected}\n")
+                process.stdin.flush()
+                continue
+
+            candidates: dict[int, np.ndarray] = {}
+            positions_by_game = {item.game_id: item for item in pending}
+            for item in pending:
+                assert item.logits is not None
+                count_for_game = min(args.top_k, len(item.legal))
+                order = np.argsort(-item.logits[item.legal], kind="stable")[:count_for_game]
+                candidates[item.game_id] = item.legal[order]
+                payload = ",".join(str(int(action)) for action in candidates[item.game_id])
+                process.stdin.write(f"Q\t{item.game_id}\t{payload}\n")
+            process.stdin.flush()
+
+            value_header = process.stdout.readline().rstrip("\n").split("\t")
+            if len(value_header) != 2 or value_header[0] != "V":
+                raise RuntimeError("arena did not return candidate expansions")
+            expanded_count = int(value_header[1])
+            candidate_positions += expanded_count
+            child_groups: dict[str, list[tuple[tuple[int, int], np.ndarray,
+                                                    np.ndarray, np.ndarray]]] = {
+                "C": [], "H": []
+            }
+            candidate_values: dict[tuple[int, int], float] = {}
+            for _ in range(expanded_count):
+                child = process.stdout.readline().rstrip("\n").split("\t")
+                if len(child) != 5 or child[0] != "C":
+                    raise RuntimeError("invalid candidate expansion protocol")
+                game_id = int(child[1])
+                action_id = int(child[2])
+                exact_value = int(child[3])
+                if game_id not in positions_by_game or action_id not in candidates[game_id]:
+                    raise RuntimeError("arena returned an unrequested candidate")
+                key = (game_id, action_id)
+                if exact_value != 2:
+                    candidate_values[key] = float(exact_value)
+                else:
+                    board, hand, meta = parse_state(child[4])
+                    agent = positions_by_game[game_id].agent
+                    child_groups[agent].append((key, board, hand, meta))
+
+            for agent, group in child_groups.items():
+                if not group:
+                    continue
+                inference_started = time.perf_counter()
+                _, child_values = sessions[agent].run(None, {
+                    "board": np.stack([item[1] for item in group]),
+                    "hand": np.stack([item[2] for item in group]),
+                    "meta": np.stack([item[3] for item in group]),
+                })
+                inference_seconds += time.perf_counter() - inference_started
+                inference_positions += len(group)
+                inference_batches += 1
+                if child_values.shape != (len(group),) or not np.isfinite(child_values).all():
+                    raise RuntimeError("model returned invalid child values")
+                for item, value in zip(group, child_values, strict=True):
+                    # 子局面轮到对手，取负号恢复为当前走子模型的视角。
+                    candidate_values[item[0]] = -float(value)
+
+            for item in pending:
+                assert item.logits is not None
+                game_candidates = candidates[item.game_id]
+                values = {int(action): candidate_values[(item.game_id, int(action))]
+                          for action in game_candidates}
+                selected = select_reranked_action(
+                    item.logits, item.legal, game_candidates, values,
+                    args.policy_weight, args.value_weight,
+                )
+                reranked_actions += int(selected != int(game_candidates[0]))
+                process.stdin.write(f"A\t{item.game_id}\t{selected}\n")
             process.stdin.flush()
         elif fields[0] == "D":
             break
@@ -163,6 +270,10 @@ def main() -> int:
         "games": args.games, "pairs": args.games // 2, "seed": args.seed,
         "opening_plies": args.opening_plies, "max_plies": args.max_plies,
         "unique_openings": len(set(openings.values())),
+        "selection": {"top_k": args.top_k, "policy_weight": args.policy_weight,
+                      "value_weight": args.value_weight,
+                      "reranked_actions": reranked_actions,
+                      "candidate_positions": candidate_positions},
         "candidate": {"model": str(args.candidate.resolve()),
                       "sha256": candidate_manifest["onnx_sha256"]},
         "champion": {"model": str(args.champion.resolve()),

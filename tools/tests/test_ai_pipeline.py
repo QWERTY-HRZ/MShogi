@@ -18,6 +18,7 @@ from mshogi_ai.data import (
 from mshogi_ai.model import (MShogiNet, ModelConfig, expand_model_state,
                              policy_value_loss)
 from run_onnx_arena import promotion_eligible, wilson_interval
+from run_candidate_arena import select_reranked_action
 from manage_replay_buffer import add_shards
 from manage_replay_pool import update_pool
 from promote_puct_champion import validate_arena
@@ -172,6 +173,18 @@ def test_wilson_interval_handles_empty_and_extreme_results() -> None:
     lower, upper = wilson_interval(100, 100)
     assert 0.96 < lower < 0.97
     assert upper == 1.0
+
+
+def test_dual_model_value_reranking_uses_current_player_values() -> None:
+    logits = np.full(990, -10.0, dtype=np.float32)
+    logits[10] = 2.0
+    logits[20] = 1.8
+    legal = np.asarray([10, 20, 30], dtype=np.int64)
+    candidates = np.asarray([10, 20], dtype=np.int64)
+    selected = select_reranked_action(
+        logits, legal, candidates, {10: -1.0, 20: 1.0}, 1.0, 0.5
+    )
+    assert selected == 20
 
 
 def test_proof_sample_can_never_promote_champion() -> None:
