@@ -21,6 +21,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--games", type=int, default=200)
     parser.add_argument("--depth", type=int, default=2)
+    parser.add_argument("--threads", type=int, default=16)
     parser.add_argument("--simulations", type=int, required=True)
     parser.add_argument("--leaves-per-batch", type=int, default=4)
     parser.add_argument("--virtual-loss", type=float, default=1.0)
@@ -29,7 +30,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=20260913)
     args = parser.parse_args()
     if (args.games <= 0 or args.games % 2 or args.depth <= 0 or
-            args.simulations < 2 or args.leaves_per_batch <= 0):
+            args.simulations < 2 or args.leaves_per_batch <= 0 or args.threads <= 0):
         raise ValueError("invalid PUCT versus Alpha-Beta configuration")
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
@@ -41,6 +42,7 @@ def main() -> int:
     command = [
         str(args.arena_exe.resolve()), "--runtime", str(args.runtime.resolve()),
         "--candidate", str(model), "--alpha-beta-depth", str(args.depth),
+        "--threads", str(args.threads),
         "--games", str(args.games), "--simulations", str(args.simulations),
         "--leaves-per-batch", str(args.leaves_per_batch),
         "--virtual-loss", str(args.virtual_loss),
@@ -99,7 +101,8 @@ def main() -> int:
         "model": str(model), "model_sha256": manifest["onnx_sha256"],
         "rule_version": RULE_VERSION, "arena_commit": arena_commit,
         "games": args.games, "pairs": args.games // 2,
-        "alpha_beta_depth": args.depth, "simulations": args.simulations,
+        "alpha_beta_depth": args.depth, "threads": args.threads,
+        "simulations": args.simulations,
         "leaves_per_batch": args.leaves_per_batch,
         "opening_plies": args.opening_plies, "max_plies": args.max_plies,
         "seed": args.seed, "unique_openings": len(set(openings.values())),

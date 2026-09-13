@@ -1,12 +1,14 @@
 #include "PuctSearch.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #ifndef MSHOGI_CORE_COMMIT
@@ -29,6 +31,7 @@ struct Config {
     int openingPlies = 6;
     int maxPlies = 100;
     int alphaBetaDepth = 0;
+    int threads = 1;
     double exploration = 1.5;
     double virtualLoss = 1.0;
     std::uint64_t seed = 1;
@@ -119,12 +122,13 @@ int main(int argc, char* argv[]) {
             else if (option == "--opening-plies") config.openingPlies = std::stoi(requireValue(index, argc, argv));
             else if (option == "--max-plies") config.maxPlies = std::stoi(requireValue(index, argc, argv));
             else if (option == "--alpha-beta-depth") config.alphaBetaDepth = std::stoi(requireValue(index, argc, argv));
+            else if (option == "--threads") config.threads = std::stoi(requireValue(index, argc, argv));
             else if (option == "--seed") config.seed = std::stoull(requireValue(index, argc, argv));
             else throw std::invalid_argument("未知选项: " + option);
         }
         if (config.games <= 0 || config.games % 2 != 0 || config.simulations < 2 ||
             config.leavesPerBatch <= 0 || config.virtualLoss < 0.0 ||
-            config.alphaBetaDepth < 0 ||
+            config.alphaBetaDepth < 0 || config.threads <= 0 ||
             config.openingPlies < 0 || config.maxPlies <= config.openingPlies ||
             config.runtimePath.empty() || config.candidatePath.empty() ||
             (config.alphaBetaDepth <= 0 && config.championPath.empty())) {
@@ -179,6 +183,7 @@ int main(int argc, char* argv[]) {
             std::vector<std::uint64_t> seeds(games.size(), 0);
             std::vector<double> temperatures(games.size(), 0.0);
             std::vector<std::optional<Move>> alphaBetaMoves(games.size());
+            std::vector<std::size_t> alphaBetaGames;
             for (std::size_t index = 0; index < games.size(); ++index) {
                 if (finished(games[index], config.maxPlies)) continue;
                 seeds[index] = mixedSeed(config.seed, games[index].pairId,
@@ -186,11 +191,27 @@ int main(int argc, char* argv[]) {
                 if (candidateTurn(games[index])) {
                     candidatePositions[index] = &games[index].core;
                 } else if (config.alphaBetaDepth > 0) {
-                    alphaBetaMoves[index] = alphaBeta.chooseAction(games[index].core);
+                    alphaBetaGames.push_back(index);
                 } else {
                     championPositions[index] = &games[index].core;
                 }
             }
+            std::atomic_size_t nextAlphaBeta{0};
+            const int workerCount = std::min<int>(config.threads, alphaBetaGames.size());
+            std::vector<std::thread> workers;
+            workers.reserve(workerCount);
+            for (int worker = 0; worker < workerCount; ++worker) {
+                workers.emplace_back([&] {
+                    while (true) {
+                        const std::size_t task = nextAlphaBeta.fetch_add(1);
+                        if (task >= alphaBetaGames.size()) return;
+                        const std::size_t gameIndex = alphaBetaGames[task];
+                        alphaBetaMoves[gameIndex] = alphaBeta.chooseAction(
+                            games[gameIndex].core);
+                    }
+                });
+            }
+            for (auto& worker : workers) worker.join();
             const auto candidateResults = candidateSearch.search(
                 candidatePositions, seeds, temperatures);
             std::vector<std::optional<PuctResult>> championResults(games.size());

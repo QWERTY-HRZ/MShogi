@@ -139,7 +139,7 @@ def main() -> int:
             "--model", str(args.candidate.resolve()),
             "--manifest", str(args.candidate_manifest.resolve()),
             "--output", str(common_root / f"puct_{budget}"),
-            "--games", str(args.games), "--depth", "2",
+            "--games", str(args.games), "--depth", "2", "--threads", "16",
             "--simulations", str(budget), "--leaves-per-batch", "4",
             "--virtual-loss", "1", "--opening-plies", "6", "--max-plies", "200",
             "--seed", str(args.seed),
