@@ -6,12 +6,30 @@
 #include <QMessageBox>
 #include <QCoreApplication>
 #include <QDir>
+#include <QScreen>
 #include "GameSetupDialog.h"
 #ifdef MSHOGI_WITH_ONNX_AGENT
 #include "OnnxAgent.h"
 #endif
 // QSS
 #include <QStyle>
+
+namespace {
+class BoardView : public QGraphicsView {
+public:
+    using QGraphicsView::QGraphicsView;
+
+protected:
+    void resizeEvent(QResizeEvent* event) override {
+        QGraphicsView::resizeEvent(event);
+        // Fit only after the viewport has its actual layout size, including
+        // changes caused by sidebar fonts and labels, not just window resizes.
+        if (scene()) {
+            fitInView(scene()->sceneRect(), Qt::KeepAspectRatio);
+        }
+    }
+};
+}
 
 UIController::UIController(QWidget *parent, bool promptOnStart)
     : QMainWindow(parent)
@@ -51,7 +69,7 @@ void UIController::setupUi() {
     setCentralWidget(centralWidget);
     QHBoxLayout* mainLayout = new QHBoxLayout(centralWidget);
     // 整体窗口
-    m_view = new QGraphicsView(m_scene);
+    m_view = new BoardView(m_scene);
     m_view->setRenderHint(QPainter::Antialiasing);
     m_view->setDragMode(QGraphicsView::NoDrag);
     m_view->setMinimumSize(100, 100);
@@ -78,14 +96,21 @@ void UIController::setupUi() {
     QGroupBox* clockGroup = new QGroupBox("棋钟");
     QVBoxLayout* clockLayout = new QVBoxLayout(clockGroup);
 
-    m_lblGameInfo = new QLabel("总用时: 00:00 | 棋钟: -- 分 + --");
+    // Explicit two-line rows keep timer updates from changing the layout.
+    m_lblGameInfo = new QLabel("总用时: 00:00\n棋钟: -- 分 + --");
     m_lblGameInfo->setObjectName("lblGameInfo");
+    m_lblGameInfo->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_lblGameInfo->setTextFormat(Qt::PlainText);
 
-    m_lblSenteTurn = new QLabel("先手回合：--");
+    m_lblSenteTurn = new QLabel("先手：--\n剩余 --:--");
     m_lblSenteTurn->setObjectName("lblSenteTurn");
+    m_lblSenteTurn->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_lblSenteTurn->setTextFormat(Qt::PlainText);
 
-    m_lblGoteTurn = new QLabel("后手回合：--");
+    m_lblGoteTurn = new QLabel("后手：--\n剩余 --:--");
     m_lblGoteTurn->setObjectName("lblGoteTurn");
+    m_lblGoteTurn->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_lblGoteTurn->setTextFormat(Qt::PlainText);
 
     // 对局信息保持精简，所有计时内容统一放入独立棋钟区域。
     clockLayout->addWidget(m_lblGameInfo);
@@ -141,8 +166,13 @@ void UIController::setupUi() {
     sideLayout->addLayout(btnLayout);
     mainLayout->addLayout(sideLayout, 1);
 
-    this->setMinimumSize(800, 600);
-    resize(GameConstants::INITIAL_WIDTH, GameConstants::INITIAL_HEIGHT);
+    QSize initialSize(GameConstants::INITIAL_WIDTH, GameConstants::INITIAL_HEIGHT);
+    if (const QScreen* currentScreen = screen()) {
+        // Screen geometry is in logical pixels; leave room for window decorations.
+        initialSize = initialSize.boundedTo(currentScreen->availableGeometry().size() * 0.9);
+    }
+    setMinimumSize(QSize(800, 600).boundedTo(initialSize));
+    resize(initialSize);
 }
 
 bool UIController::promptSettingsAndStart() {
@@ -188,41 +218,41 @@ bool UIController::promptSettingsAndStart() {
 
 void UIController::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
-    // 让棋盘内容自适应 View 的大小
-    if (m_view && m_scene) {
-        m_view->fitInView(m_scene->sceneRect(), Qt::KeepAspectRatio);
-    }
     // 重新启用动态计算字体缩放因子 (以初始宽高为基准)
     qreal scaleW = (qreal)this->width() / GameConstants::INITIAL_WIDTH;
     qreal scaleH = (qreal)this->height() / GameConstants::INITIAL_HEIGHT;
     qreal scale = qBound(0.6, qMin(scaleW, scaleH), 3.0);
 
     // 动态更新所有文字控件的像素大小
-    auto setScaledFont = [&](QWidget* w, int baseSize, bool bold = false) {
+    // QSS owns font weights; resizing must only change the pixel size.
+    auto setScaledFont = [&](QWidget* w, int baseSize) {
         if (!w) return;
         QFont f = w->font();
         f.setPixelSize(qRound(baseSize * scale));
-        f.setBold(bold);
         w->setFont(f);
+        if (w == m_lblGameInfo || w == m_lblSenteTurn || w == m_lblGoteTurn) {
+            // Reserve both lines at the current scale, not at each timer tick.
+            w->setFixedHeight(w->sizeHint().height());
+        }
     };
 
     // 状态标签
-    setScaledFont(m_lblStatus, 22, true);
+    setScaledFont(m_lblStatus, 22);
     setScaledFont(m_lblOpeningDraw, 20);
     setScaledFont(m_lblGameInfo, 20);
     setScaledFont(m_lblSenteTurn, 20);
     setScaledFont(m_lblGoteTurn, 20);
-    setScaledFont(m_txtHistory, 20, true);
+    setScaledFont(m_txtHistory, 20);
     // 按钮变量名更新
-    setScaledFont(m_btnUndo, 18, true);
-    setScaledFont(m_btnRestart, 18, true);
-    setScaledFont(m_btnResign, 18, true);
-    setScaledFont(m_btnPauseResume, 18, true);
+    setScaledFont(m_btnUndo, 18);
+    setScaledFont(m_btnRestart, 18);
+    setScaledFont(m_btnResign, 18);
+    setScaledFont(m_btnPauseResume, 18);
 
     // 直接使用现成的 lambda 表达式，安全地修改 QGroupBox 本身
     QList<QGroupBox*> groups = this->findChildren<QGroupBox*>();
     for (auto group : groups) {
-        setScaledFont(group, 20, true);
+        setScaledFont(group, 20);
     }
 }
 
@@ -320,7 +350,7 @@ void UIController::onUpdateTimer() {
     int settingM = m_gameEngine->getClock()->getTotalSetting() / 60;
     int inc = m_gameEngine->getClock()->getIncrement();
     // 设置时长/棋钟
-    m_lblGameInfo->setText(QString("总用时: %1:%2 | 棋钟: %3分+%4秒")
+    m_lblGameInfo->setText(QString("总用时: %1:%2\n棋钟: %3分+%4秒")
                            .arg(totalM, 2, 10, QChar('0')).arg(totalS, 2, 10, QChar('0'))
                            .arg(settingM).arg(inc));
 
@@ -331,30 +361,29 @@ void UIController::onUpdateTimer() {
     bool isPlaying = (m_gameEngine->getCurrentState() == GameState::Playing);
 
     // 第三/四行：剩余时间
-    m_lblSenteTurn->setText(QString("先手（%1）：剩余 %2:%3")
+    m_lblSenteTurn->setText(QString("先手（%1）\n剩余 %2:%3")
                             .arg(m_sentePlayerName)
                             .arg(sTime / 60, 2, 10, QChar('0')).arg(sTime % 60, 2, 10, QChar('0')));
-    m_lblGoteTurn->setText(QString("后手（%1）：剩余 %2:%3")
+    m_lblGoteTurn->setText(QString("后手（%1）\n剩余 %2:%3")
                            .arg(m_gotePlayerName)
                            .arg(gTime / 60, 2, 10, QChar('0')).arg(gTime % 60, 2, 10, QChar('0')));
 
-    // 使用动态属性 替代硬编码的 StyleSheet
-    if (isPlaying && curP == Player::Sente) {
-        m_lblSenteTurn->setProperty("isActive", true);
-        m_lblGoteTurn->setProperty("isActive", false);
-    } else if (isPlaying && curP == Player::Gote) {
-        m_lblSenteTurn->setProperty("isActive", false);
-        m_lblGoteTurn->setProperty("isActive", true);
-    } else {
-        m_lblSenteTurn->setProperty("isActive", false);
-        m_lblGoteTurn->setProperty("isActive", false);
-    }
-
-    // 重新渲染
-    m_lblSenteTurn->style()->unpolish(m_lblSenteTurn);
-    m_lblSenteTurn->style()->polish(m_lblSenteTurn);
-    m_lblGoteTurn->style()->unpolish(m_lblGoteTurn);
-    m_lblGoteTurn->style()->polish(m_lblGoteTurn);
+    // Re-polish only when the active player changes. QSS polishing can reset
+    // the font size, so preserve the size selected by resizeEvent explicitly.
+    auto updateActiveStyle = [](QLabel* label, bool active) {
+        if (label->property("isActive").isValid()
+            && label->property("isActive").toBool() == active) return;
+        const int pixelSize = label->fontInfo().pixelSize();
+        label->setProperty("isActive", active);
+        label->style()->unpolish(label);
+        label->style()->polish(label);
+        QFont font = label->font();
+        font.setPixelSize(pixelSize);
+        label->setFont(font);
+        label->update();
+    };
+    updateActiveStyle(m_lblSenteTurn, isPlaying && curP == Player::Sente);
+    updateActiveStyle(m_lblGoteTurn, isPlaying && curP == Player::Gote);
 }
 
 void UIController::onUndoExecuted() {
